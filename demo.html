@@ -18,6 +18,7 @@
     <video id="video"
            width="800"
            autoplay
+           muted 
            playsinline
            class="rounded-lg">
     </video>
@@ -64,14 +65,26 @@ async function loadModel() {
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
     video.srcObject = stream;
-    video.onloadeddata = () => {
-      processFrame();
-    };
+
+    // WICHTIG: explizit starten (sonst schwarzes Video in Chrome/Edge)
+    await video.play();
+
+    // Sanity-Check (optional, aber hilfreich beim Debuggen)
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.warn("Video stream started, but no frames yet");
+    }
+
+    // Pipeline starten
+    processFrame();
+
   } catch (err) {
     console.error("Camera error:", err);
+    alert("Kamera konnte nicht gestartet werden");
   }
 }
+
 
 
 async function processFrame() {
