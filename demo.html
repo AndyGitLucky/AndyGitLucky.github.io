@@ -174,15 +174,12 @@ async function processFrame() {
         `Emotion: ${EMOTIONS[maxIdx]} (${confidence}%)`;
     });
   }
-
   setTimeout(processFrame, 100); // ~10 FPS
+  }
 
-}
-
-(async () => {
-  await loadModel();
+  loadModel();
   startCamera();
-})();
+
 
 </script>
 
