@@ -3,12 +3,27 @@
 <head>
   <meta charset="utf-8">
   <title>Emotion Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col items-center">
 
-<h1>Emotion Demo</h1>
+  <h1 class="text-3xl font-bold mt-8">
+    Emotion Demo
+  </h1>
 
-<video id="video" width="400" autoplay playsinline></video>
+  <div class="mt-6 bg-gray-900 p-4 rounded-xl shadow-lg">
+    <video id="video"
+           width="800"
+           autoplay
+           playsinline
+           class="rounded-lg">
+    </video>
+  </div>
+
+  <div id="emotion"
+       class="mt-6 text-xl font-semibold">
+    Emotion: —
+  </div>
 
 <script>
 async function startCamera() {
@@ -29,4 +44,5 @@ startCamera();
 </script>
 
 </body>
+
 </html>
