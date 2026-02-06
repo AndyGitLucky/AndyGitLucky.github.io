@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <title>Emotion Demo</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col items-center">
 
@@ -34,22 +37,84 @@
 const video = document.getElementById("video");
 const canvas = document.getElementById("debugCanvas");
 const ctx = canvas.getContext("2d");
+const SMOOTHING = 5;
+const EMOTIONS = [
+  "Angry",
+  "Disgusted",
+  "Fearful",
+  "Happy",
+  "Sad",
+  "Surprised",
+  "Neutral"
+];
+let model;
+let faceModel;
+let lastFaceBox = null;
+let lastFaceCheck = 0;
+let scoreHistory = [];
+
+async function loadModel() {
+  model = await tf.loadLayersModel("model/model.json");
+  faceModel = await blazeface.load();
+  console.log("Models loaded");
+  model.summary();
+}
+
 
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
-    requestAnimationFrame(processFrame);
+    video.onloadeddata = () => {
+      processFrame();
+    };
   } catch (err) {
     console.error("Camera error:", err);
   }
 }
 
-function processFrame() {
-  // Draw current frame scaled to 48x48
-  ctx.drawImage(video, 0, 0, 48, 48);
 
-  // Convert to grayscale
+async function processFrame() {
+  let faceBox = lastFaceBox;
+
+  if (faceModel && Date.now() - lastFaceCheck > 500) {
+  lastFaceCheck = Date.now();
+
+  const faces = await faceModel.estimateFaces(video, false);
+
+  if (faces.length > 0) {
+    const f = faces[0];
+    const [x1, y1] = f.topLeft;
+    const [x2, y2] = f.bottomRight;
+
+    faceBox = {
+      x: Math.max(0, x1),
+      y: Math.max(0, y1),
+      w: Math.max(1, x2 - x1),
+      h: Math.max(1, y2 - y1)
+    };
+
+    lastFaceBox = faceBox;
+  }
+}
+
+  if (!faceBox) {
+    setTimeout(processFrame, 100);
+    return;
+  }
+
+  ctx.drawImage(
+    video,
+    faceBox.x,
+    faceBox.y,
+    faceBox.w,
+    faceBox.h,
+    0,
+    0,
+    48,
+    48
+  );
+
   const imageData = ctx.getImageData(0, 0, 48, 48);
   const data = imageData.data;
 
@@ -66,10 +131,46 @@ function processFrame() {
 
   ctx.putImageData(imageData, 0, 0);
 
-  requestAnimationFrame(processFrame);
+  if (model) {
+    tf.tidy(() => {
+      const tensor = tf.browser
+        .fromPixels(canvas, 1)        // grayscale
+        .toFloat()
+        .div(255.0)
+        .reshape([1, 48, 48, 1]);
+
+      const preds = model.predict(tensor);
+      const scores = Array.from(preds.dataSync());
+
+      // Glättung
+      scoreHistory.push(scores);
+      if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
+
+      const avgScores = scores.map((_, i) =>
+        scoreHistory.reduce((sum, s) => sum + s[i], 0) / scoreHistory.length
+      );
+
+      let maxIdx = 0;
+      for (let i = 1; i < avgScores.length; i++) {
+        if (avgScores[i] > avgScores[maxIdx]) maxIdx = i;
+      }
+
+      const confidence = (avgScores[maxIdx] * 100).toFixed(1);
+
+      document.getElementById("emotion").innerText =
+        `Emotion: ${EMOTIONS[maxIdx]} (${confidence}%)`;
+    });
+  }
+
+  setTimeout(processFrame, 100); // ~10 FPS
+
 }
 
-startCamera();
+(async () => {
+  await loadModel();
+  startCamera();
+})();
+
 </script>
 
 
