@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -14,7 +14,7 @@
     Emotion Demo
   </h1>
 
-  <div class="mt-6 bg-gray-900 p-4 rounded-xl shadow-lg">
+  <div class="mt-6 bg-gray-900 p-4 rounded-xl shadow-lg relative">
     <video id="video"
            width="800"
            autoplay
@@ -22,6 +22,11 @@
            playsinline
            class="rounded-lg">
     </video>
+    <canvas id="overlay"
+        width="800"
+        height="450"
+        class="absolute top-0 left-0 pointer-events-none">
+    </canvas>
     <canvas id="debugCanvas"
         width="48"
         height="48"
@@ -35,6 +40,8 @@
   </div>
 
 <script>
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
 const video = document.getElementById("video");
 const canvas = document.getElementById("debugCanvas");
 const ctx = canvas.getContext("2d");
@@ -95,16 +102,11 @@ async function startCamera() {
   }
 }
 
-
-
 async function processFrame() {
 
-  // IMMER zuerst irgendwas zeichnen (Fallback!)
-  ctx.drawImage(video, 0, 0, 48, 48);
+  // 1️⃣ Face Detection (nur alle 500 ms)
+  let faceBox = null;
 
-  let faceBox = lastFaceBox;
-
-  // Face Detection nur optional (darf niemals blockieren)
   if (faceModel && Date.now() - lastFaceCheck > 500) {
     lastFaceCheck = Date.now();
 
@@ -126,22 +128,26 @@ async function processFrame() {
     }
   }
 
-  // 3️⃣ Wenn ein Gesicht existiert → croppen
-  if (faceBox) {
-    ctx.drawImage(
-      video,
-      faceBox.x,
-      faceBox.y,
-      faceBox.w,
-      faceBox.h,
-      0,
-      0,
-      48,
-      48
-    );
+  // 2️⃣ KEIN Gesicht → nichts tun
+  if (!lastFaceBox) {
+    setTimeout(processFrame, 100);
+    return;
   }
 
-  // 4️⃣ Graustufen IMMER anwenden
+  // 3️⃣ Gesicht croppen → 48×48
+  ctx.drawImage(
+    video,
+    lastFaceBox.x,
+    lastFaceBox.y,
+    lastFaceBox.w,
+    lastFaceBox.h,
+    0,
+    0,
+    48,
+    48
+  );
+
+  // 4️⃣ Grayscale (auf DEM Gesicht)
   const imageData = ctx.getImageData(0, 0, 48, 48);
   const data = imageData.data;
 
@@ -158,11 +164,11 @@ async function processFrame() {
 
   ctx.putImageData(imageData, 0, 0);
 
-  // 5️⃣ Prediction nur wenn Modell da ist
+  // 5️⃣ Prediction NUR auf Face-Tensor
   if (model) {
     tf.tidy(() => {
       const tensor = tf.browser
-        .fromPixels(canvas, 1)
+        .fromPixels(canvas, 1)   // [48,48,1]
         .toFloat()
         .div(255.0)
         .reshape([1, 48, 48, 1]);
@@ -191,6 +197,7 @@ async function processFrame() {
 
   setTimeout(processFrame, 100);
 }
+
 
   loadModel();
   startCamera();
