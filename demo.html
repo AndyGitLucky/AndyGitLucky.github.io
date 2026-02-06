@@ -40,28 +40,198 @@
   </div>
 
 <script>
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
 const video = document.getElementById("video");
+const canvas = document.getElementById("debugCanvas");
+const ctx = canvas.getContext("2d");
+const SMOOTHING = 5;
+const faceCanvas = document.createElement("canvas");
+const faceCtx = faceCanvas.getContext("2d");
+const EMOTIONS = [
+  "Angry",
+  "Disgusted",
+  "Fearful",
+  "Happy",
+  "Sad",
+  "Surprised",
+  "Neutral"
+];
+let model;
+let faceModel;
+let lastFaceBox = null;
+let lastFaceCheck = 0;
+let scoreHistory = [];
 
-async function testBlazeFace() {
+async function loadModel() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-    await video.play();
+    console.log("Loading emotion model...");
+    model = await tf.loadLayersModel("model/model.json");
+    console.log("Emotion model loaded");
 
-    const faceModel = await blazeface.load();
-    console.log("BlazeFace loaded");
+    console.log("Loading face model...");
+    faceModel = await blazeface.load();
+    console.log("Face model loaded");
 
-    setInterval(async () => {
-      const faces = await faceModel.estimateFaces(video, false);
-      console.log("Faces:", faces);
-    }, 1000);
-
+    model.summary();
   } catch (e) {
-    console.error("ERROR:", e);
+    console.error("Model loading failed:", e);
   }
 }
 
-testBlazeFace();
+  
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+    video.srcObject = stream;
+
+    // WICHTIG: explizit starten (sonst schwarzes Video in Chrome/Edge)
+    await video.play();
+
+    // Sanity-Check (optional, aber hilfreich beim Debuggen)
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.warn("Video stream started, but no frames yet");
+    }
+
+    // Pipeline starten
+    processFrame();
+
+  } catch (err) {
+    console.error("Camera error:", err);
+    alert("Kamera konnte nicht gestartet werden");
+  }
+}
+
+
+async function processFrame() {
+
+  // Safety: Video muss echte Größe haben
+  if (video.videoWidth === 0 || video.videoHeight === 0) {
+    setTimeout(processFrame, 100);
+    return;
+  }
+
+  // Face Detection (gedrosselt)
+  if (faceModel && Date.now() - lastFaceCheck > 500) {
+    lastFaceCheck = Date.now();
+  
+    const faces = await faceModel.estimateFaces(video, false);
+  
+    if (faces.length > 0) {
+      const f = faces[0];
+      const [x1, y1] = f.topLeft;
+      const [x2, y2] = f.bottomRight;
+  
+      lastFaceBox = {
+        x: Math.max(0, x1),
+        y: Math.max(0, y1),
+        w: Math.max(1, x2 - x1),
+        h: Math.max(1, y2 - y1)
+      };
+    } else {
+      lastFaceBox = null;
+    }
+  }
+  
+  // ✅ HIER: Overlay zeichnen (GENAU HIER!)
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  
+  if (lastFaceBox) {
+    octx.strokeStyle = "lime";
+    octx.lineWidth = 3;
+    octx.strokeRect(
+      lastFaceBox.x,
+      lastFaceBox.y,
+      lastFaceBox.w,
+      lastFaceBox.h
+    );
+  }
+  
+  // Kein Gesicht → nichts tun
+  if (!lastFaceBox) {
+    setTimeout(processFrame, 100);
+    return;
+  }
+
+
+  // 1️⃣ Offscreen-Canvas auf Face-Größe setzen
+  faceCanvas.width  = lastFaceBox.w;
+  faceCanvas.height = lastFaceBox.h;
+
+  // 2️⃣ Gesicht in Originalauflösung croppen
+  faceCtx.drawImage(
+    video,
+    lastFaceBox.x,
+    lastFaceBox.y,
+    lastFaceBox.w,
+    lastFaceBox.h,
+    0,
+    0,
+    faceCanvas.width,
+    faceCanvas.height
+  );
+
+  // 3️⃣ Jetzt sauber auf 48×48 skalieren (DEIN Debug-Canvas)
+  ctx.drawImage(faceCanvas, 0, 0, 48, 48);
+
+  // 4️⃣ Grayscale
+  const imageData = ctx.getImageData(0, 0, 48, 48);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const gray =
+      0.299 * data[i] +
+      0.587 * data[i + 1] +
+      0.114 * data[i + 2];
+
+    data[i] = gray;
+    data[i + 1] = gray;
+    data[i + 2] = gray;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  // 5️⃣ Prediction
+  if (model) {
+    tf.tidy(() => {
+      const tensor = tf.browser
+        .fromPixels(canvas, 1)
+        .toFloat()
+        .div(255.0)
+        .reshape([1, 48, 48, 1]);
+
+      const preds = model.predict(tensor);
+      const scores = Array.from(preds.dataSync());
+
+      scoreHistory.push(scores);
+      if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
+
+      const avgScores = scores.map((_, i) =>
+        scoreHistory.reduce((s, v) => s + v[i], 0) / scoreHistory.length
+      );
+
+      let maxIdx = 0;
+      for (let i = 1; i < avgScores.length; i++) {
+        if (avgScores[i] > avgScores[maxIdx]) maxIdx = i;
+      }
+
+      const confidence = (avgScores[maxIdx] * 100).toFixed(1);
+
+      document.getElementById("emotion").innerText =
+        `Emotion: ${EMOTIONS[maxIdx]} (${confidence}%)`;
+    });
+  }
+
+  setTimeout(processFrame, 100);
+}
+
+
+
+  startCamera();
+  loadModel();
+
+
 </script>
 
 
