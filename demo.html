@@ -141,22 +141,32 @@ async function processFrame() {
     }
   }
 
- // ---- Overlay ----
+// ---- Overlay ----
 octx.clearRect(0, 0, overlay.width, overlay.height);
 
 if (lastFaceBox) {
-  const scaleX = overlay.width  / video.videoWidth;
-  const scaleY = overlay.height / video.videoHeight;
+  const videoRect = video.getBoundingClientRect();
+  const overlayRect = overlay.getBoundingClientRect();
+
+  // Effektive Skalierung des gerenderten Videos
+  const scaleX = videoRect.width / video.videoWidth;
+  const scaleY = videoRect.height / video.videoHeight;
+
+  // Offset (falls Video nicht exakt bei Overlay (0,0) liegt)
+  const offsetX = videoRect.left - overlayRect.left;
+  const offsetY = videoRect.top  - overlayRect.top;
 
   octx.strokeStyle = "lime";
   octx.lineWidth = 3;
+
   octx.strokeRect(
-    lastFaceBox.x * scaleX,
-    lastFaceBox.y * scaleY,
+    offsetX + lastFaceBox.x * scaleX,
+    offsetY + lastFaceBox.y * scaleY,
     lastFaceBox.w * scaleX,
     lastFaceBox.h * scaleY
   );
 }
+
 
 
   if (!lastFaceBox) {
