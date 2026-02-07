@@ -1,128 +1,120 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Emotion Demo</title>
+  <title>Emotion Demo (ONNX)</title>
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+  <!-- Face detection -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
 
+  <!-- ONNX Runtime Web -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
+
 <body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col items-center">
 
-  <h1 class="text-3xl font-bold mt-8">
-    Emotion Demo
-  </h1>
+<h1 class="text-3xl font-bold mt-8">
+  Emotion Demo (ONNX)
+</h1>
 
-  <div class="mt-6 bg-gray-900 p-4 rounded-xl shadow-lg relative">
-    <video id="video"
-           width="800"
-           autoplay
-           muted 
-           playsinline
-           class="rounded-lg">
-    </video>
-    <canvas id="overlay"
-        width="800"
-        height="450"
-        class="absolute top-0 left-0 pointer-events-none">
-    </canvas>
-    <canvas id="debugCanvas"
-        width="48"
-        height="48"
-        class="mt-4 border border-gray-700">
-    </canvas>
-  </div>
+<div class="mt-6 bg-gray-900 p-4 rounded-xl shadow-lg relative">
+  <video id="video"
+         width="800"
+         autoplay
+         muted
+         playsinline
+         class="rounded-lg"></video>
 
-  <div id="emotion"
-       class="mt-6 text-xl font-semibold">
-    Emotion: —
-  </div>
+  <canvas id="overlay"
+          width="800"
+          height="450"
+          class="absolute top-0 left-0 pointer-events-none"></canvas>
+
+  <canvas id="debugCanvas"
+          width="48"
+          height="48"
+          class="mt-4 border border-gray-700"></canvas>
+</div>
+
+<div id="emotion" class="mt-6 text-xl font-semibold">
+  Emotion: —
+</div>
 
 <script>
+/* =======================
+   SETUP
+======================= */
+
+const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const octx = overlay.getContext("2d");
-const video = document.getElementById("video");
+
 const canvas = document.getElementById("debugCanvas");
 const ctx = canvas.getContext("2d");
-const SMOOTHING = 5;
+
 const faceCanvas = document.createElement("canvas");
 const faceCtx = faceCanvas.getContext("2d");
+
 const EMOTIONS = [
-  "Angry",
-  "Disgusted",
-  "Fearful",
-  "Happy",
-  "Sad",
-  "Surprised",
-  "Neutral"
+  "Angry", "Disgusted", "Fearful",
+  "Happy", "Sad", "Surprised", "Neutral"
 ];
-let model;
-let faceModel;
-let lastFaceBox = null;
-let lastFaceCheck = 0;
+
+const SMOOTHING = 5;
 let scoreHistory = [];
 
-async function loadModel() {
-  try {
-    console.log("Loading emotion model...");
-    model = await tf.loadLayersModel("model/model.json");
-    console.log("Emotion model loaded");
+let faceModel = null;
+let session = null;
+let lastFaceBox = null;
+let lastFaceCheck = 0;
 
-    console.log("Loading face model...");
-    faceModel = await blazeface.load();
-    console.log("Face model loaded");
+/* =======================
+   LOAD MODELS
+======================= */
 
-    model.summary();
-  } catch (e) {
-    console.error("Model loading failed:", e);
-  }
+async function loadModels() {
+  console.log("Loading BlazeFace…");
+  faceModel = await blazeface.load();
+  console.log("BlazeFace loaded");
+
+  console.log("Loading ONNX model…");
+  session = await ort.InferenceSession.create("model.onnx");
+  console.log("ONNX model loaded");
 }
 
-  
+/* =======================
+   CAMERA
+======================= */
+
 async function startCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-
-    video.srcObject = stream;
-
-    // WICHTIG: explizit starten (sonst schwarzes Video in Chrome/Edge)
-    await video.play();
-
-    // Sanity-Check (optional, aber hilfreich beim Debuggen)
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      console.warn("Video stream started, but no frames yet");
-    }
-
-    // Pipeline starten
-    processFrame();
-
-  } catch (err) {
-    console.error("Camera error:", err);
-    alert("Kamera konnte nicht gestartet werden");
-  }
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
+  await video.play();
+  processFrame();
 }
 
+/* =======================
+   MAIN LOOP
+======================= */
 
 async function processFrame() {
-
-  // Safety: Video muss echte Größe haben
-  if (video.videoWidth === 0 || video.videoHeight === 0) {
-    setTimeout(processFrame, 100);
+  if (video.videoWidth === 0) {
+    requestAnimationFrame(processFrame);
     return;
   }
 
-  // Face Detection (gedrosselt)
-  if (faceModel && Date.now() - lastFaceCheck > 500) {
+  /* ---- Face detection (throttled) ---- */
+  if (Date.now() - lastFaceCheck > 500) {
     lastFaceCheck = Date.now();
-  
     const faces = await faceModel.estimateFaces(video, false);
-  
+
     if (faces.length > 0) {
       const f = faces[0];
       const [x1, y1] = f.topLeft;
       const [x2, y2] = f.bottomRight;
-  
+
       lastFaceBox = {
         x: Math.max(0, x1),
         y: Math.max(0, y1),
@@ -133,10 +125,9 @@ async function processFrame() {
       lastFaceBox = null;
     }
   }
-  
-  // ✅ HIER: Overlay zeichnen (GENAU HIER!)
+
+  /* ---- Overlay ---- */
   octx.clearRect(0, 0, overlay.width, overlay.height);
-  
   if (lastFaceBox) {
     octx.strokeStyle = "lime";
     octx.lineWidth = 3;
@@ -147,95 +138,72 @@ async function processFrame() {
       lastFaceBox.h
     );
   }
-  
-  // Kein Gesicht → nichts tun
+
   if (!lastFaceBox) {
-    setTimeout(processFrame, 100);
+    requestAnimationFrame(processFrame);
     return;
   }
 
-
-  // 1️⃣ Offscreen-Canvas auf Face-Größe setzen
-  faceCanvas.width  = lastFaceBox.w;
+  /* ---- Face crop ---- */
+  faceCanvas.width = lastFaceBox.w;
   faceCanvas.height = lastFaceBox.h;
 
-  // 2️⃣ Gesicht in Originalauflösung croppen
   faceCtx.drawImage(
     video,
-    lastFaceBox.x,
-    lastFaceBox.y,
-    lastFaceBox.w,
-    lastFaceBox.h,
-    0,
-    0,
-    faceCanvas.width,
-    faceCanvas.height
+    lastFaceBox.x, lastFaceBox.y,
+    lastFaceBox.w, lastFaceBox.h,
+    0, 0,
+    faceCanvas.width, faceCanvas.height
   );
 
-  // 3️⃣ Jetzt sauber auf 48×48 skalieren (DEIN Debug-Canvas)
+  /* ---- Resize to 48×48 ---- */
   ctx.drawImage(faceCanvas, 0, 0, 48, 48);
 
-  // 4️⃣ Grayscale
-  const imageData = ctx.getImageData(0, 0, 48, 48);
-  const data = imageData.data;
+  /* ---- Grayscale + normalize ---- */
+  const img = ctx.getImageData(0, 0, 48, 48).data;
+  const input = new Float32Array(48 * 48);
 
-  for (let i = 0; i < data.length; i += 4) {
-    const gray =
-      0.299 * data[i] +
-      0.587 * data[i + 1] +
-      0.114 * data[i + 2];
-
-    data[i] = gray;
-    data[i + 1] = gray;
-    data[i + 2] = gray;
+  for (let i = 0, j = 0; i < img.length; i += 4, j++) {
+    input[j] = (0.299 * img[i] +
+                0.587 * img[i + 1] +
+                0.114 * img[i + 2]) / 255.0;
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  /* ---- ONNX inference ---- */
+  if (session) {
+    const tensor = new ort.Tensor("float32", input, [1, 48, 48, 1]);
+    const feeds = {};
+    feeds[session.inputNames[0]] = tensor;
 
-  // 5️⃣ Prediction
-  if (model) {
-    tf.tidy(() => {
-      const tensor = tf.browser
-        .fromPixels(canvas, 1)
-        .toFloat()
-        .div(255.0)
-        .reshape([1, 48, 48, 1]);
+    const results = await session.run(feeds);
+    const scores = Array.from(results[session.outputNames[0]].data);
 
-      const preds = model.predict(tensor);
-      const scores = Array.from(preds.dataSync());
+    scoreHistory.push(scores);
+    if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
 
-      scoreHistory.push(scores);
-      if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
+    const avg = scores.map((_, i) =>
+      scoreHistory.reduce((s, v) => s + v[i], 0) / scoreHistory.length
+    );
 
-      const avgScores = scores.map((_, i) =>
-        scoreHistory.reduce((s, v) => s + v[i], 0) / scoreHistory.length
-      );
+    const maxIdx = avg.indexOf(Math.max(...avg));
+    const confidence = (avg[maxIdx] * 100).toFixed(1);
 
-      let maxIdx = 0;
-      for (let i = 1; i < avgScores.length; i++) {
-        if (avgScores[i] > avgScores[maxIdx]) maxIdx = i;
-      }
-
-      const confidence = (avgScores[maxIdx] * 100).toFixed(1);
-
-      document.getElementById("emotion").innerText =
-        `Emotion: ${EMOTIONS[maxIdx]} (${confidence}%)`;
-    });
+    document.getElementById("emotion").innerText =
+      `Emotion: ${EMOTIONS[maxIdx]} (${confidence}%)`;
   }
 
-  setTimeout(processFrame, 100);
+  requestAnimationFrame(processFrame);
 }
 
+/* =======================
+   START
+======================= */
 
-
-  startCamera();
-  loadModel();
-
-
+(async () => {
+  await loadModels();
+  await startCamera();
+})();
 </script>
 
-
-
 </body>
-
 </html>
