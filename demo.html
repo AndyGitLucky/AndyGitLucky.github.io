@@ -80,7 +80,7 @@ async function loadModels() {
   console.log("BlazeFace loaded");
 
   console.log("Loading ONNX model…");
-  session = await ort.InferenceSession.create("model.onnx");
+  session = await ort.InferenceSession.create("emotion_model.onnx");
   console.log("ONNX model loaded");
 }
 
@@ -111,7 +111,7 @@ async function processFrame() {
     const faces = await faceModel.estimateFaces(video, false);
 
     if (faces.length > 0) {
-      const f = faces[0];
+      const f = faces[0]; 
       const [x1, y1] = f.topLeft;
       const [x2, y2] = f.bottomRight;
 
