@@ -79,6 +79,10 @@ let lastFaceCheck = 0;
 ======================= */
 
 async function loadModels() {
+  console.log("Initializing TFJS backend...");
+  await tf.setBackend("webgl");
+  await tf.ready();
+
   console.log("Loading BlazeFace…");
   faceModel = await blazeface.load();
   console.log("BlazeFace loaded");
@@ -87,6 +91,7 @@ async function loadModels() {
   session = await ort.InferenceSession.create("emotion_model.onnx");
   console.log("ONNX model loaded");
 }
+
 
 /* =======================
    CAMERA
