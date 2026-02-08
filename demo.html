@@ -73,6 +73,7 @@ let faceModel = null;
 let session = null;
 let lastFaceBox = null;
 let lastFaceCheck = 0;
+const SQUARE_PADDING = 1.15; // scale the square slightly larger than detected box
 
 /* =======================
    LOAD MODELS
@@ -98,10 +99,30 @@ async function loadModels() {
 ======================= */
 
 async function startCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-  video.srcObject = stream;
-  await video.play();
-  processFrame();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    console.log('Camera stream obtained');
+    video.srcObject = stream;
+
+    // Wait for metadata so video.videoWidth/videoHeight become available
+    await new Promise((resolve) => {
+      if (video.readyState >= 1) return resolve();
+      video.addEventListener('loadedmetadata', resolve, { once: true });
+    });
+
+    // Ensure overlay is sized to the video's natural pixel size and matches CSS size
+    overlay.width = video.videoWidth || overlay.width;
+    overlay.height = video.videoHeight || overlay.height;
+    const videoRect = video.getBoundingClientRect();
+    overlay.style.width = `${videoRect.width}px`;
+    overlay.style.height = `${videoRect.height}px`;
+
+    await video.play();
+    processFrame();
+  } catch (err) {
+    console.error('Error accessing camera', err);
+    document.getElementById('emotion').innerText = `Camera error: ${err.name || err.message}`;
+  }
 }
 
 /* =======================
@@ -115,9 +136,19 @@ async function processFrame() {
   }
 
   // 🔧 FIX: Overlay an echtes Video koppeln
-  if (overlay.width !== video.videoWidth) {
-    overlay.width  = video.videoWidth;
+  // Ensure the overlay canvas internal pixel size matches the video's natural pixels
+  // and set the CSS size so the canvas visually lines up with the displayed video.
+  const videoRect = video.getBoundingClientRect();
+  if (
+    overlay.width !== video.videoWidth ||
+    overlay.height !== video.videoHeight ||
+    overlay.style.width !== `${videoRect.width}px` ||
+    overlay.style.height !== `${videoRect.height}px`
+  ) {
+    overlay.width = video.videoWidth;
     overlay.height = video.videoHeight;
+    overlay.style.width = `${videoRect.width}px`;
+    overlay.style.height = `${videoRect.height}px`;
   }
 
   /* ---- Face detection (throttled) ---- */
@@ -130,11 +161,35 @@ async function processFrame() {
       const [x1, y1] = f.topLeft;
       const [x2, y2] = f.bottomRight;
 
+      // Make the bounding box quadratic (square), centered on the detected box
+      let x = x1;
+      let y = y1;
+      let w = Math.max(1, x2 - x1);
+      let h = Math.max(1, y2 - y1);
+
+      // choose square size from the larger dimension and apply padding
+      let size = Math.max(w, h) * SQUARE_PADDING;
+
+      // If size exceeds video dimensions, cap it
+      const vw = video.videoWidth || overlay.width || 1;
+      const vh = video.videoHeight || overlay.height || 1;
+      if (size > Math.min(vw, vh)) size = Math.min(vw, vh);
+
+      // center on original box center
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      let sx = Math.max(0, cx - size / 2);
+      let sy = Math.max(0, cy - size / 2);
+
+      // clamp to video bounds
+      if (sx + size > vw) sx = Math.max(0, vw - size);
+      if (sy + size > vh) sy = Math.max(0, vh - size);
+
       lastFaceBox = {
-        x: Math.max(0, x1),
-        y: Math.max(0, y1),
-        w: Math.max(1, x2 - x1),
-        h: Math.max(1, y2 - y1)
+        x: sx,
+        y: sy,
+        w: size,
+        h: size
       };
     } else {
       lastFaceBox = null;
@@ -145,23 +200,18 @@ async function processFrame() {
 octx.clearRect(0, 0, overlay.width, overlay.height);
 
 if (lastFaceBox) {
-  const videoRect = video.getBoundingClientRect();
-  const overlayRect = overlay.getBoundingClientRect();
-
-  // Effektive Skalierung des gerenderten Videos
-  const scaleX = videoRect.width / video.videoWidth;
-  const scaleY = videoRect.height / video.videoHeight;
-
-  // Offset (falls Video nicht exakt bei Overlay (0,0) liegt)
-  const offsetX = videoRect.left - overlayRect.left;
-  const offsetY = videoRect.top  - overlayRect.top;
+  // Draw using the overlay's internal canvas coordinate space (which we set
+  // to match the video's natural pixel size). Map face box from video pixels
+  // to canvas pixels using a simple scale (normally 1), keeping it robust.
+  const scaleX = overlay.width / video.videoWidth;
+  const scaleY = overlay.height / video.videoHeight;
 
   octx.strokeStyle = "lime";
   octx.lineWidth = 3;
 
   octx.strokeRect(
-    offsetX + lastFaceBox.x * scaleX,
-    offsetY + lastFaceBox.y * scaleY,
+    lastFaceBox.x * scaleX,
+    lastFaceBox.y * scaleY,
     lastFaceBox.w * scaleX,
     lastFaceBox.h * scaleY
   );
