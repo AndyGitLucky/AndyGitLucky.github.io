@@ -15,8 +15,6 @@
   <!-- ONNX Runtime Web -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
-
-
 <body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col items-center">
 
 <h1 class="text-3xl font-bold mt-8">
@@ -39,12 +37,24 @@
   <canvas id="debugCanvas"
           width="48"
           height="48"
-          class="mt-4 border border-gray-700"></canvas>
+          class="mt-4 border border-gray-700
+                w-24 h-24
+                image-rendering-pixelated"></canvas>
 </div>
 
-<div id="emotion" class="mt-6 text-xl font-semibold">
-  Emotion: —
+<!-- Emotion Display (stable, two-line) -->
+<div class="mt-8 w-[26rem] text-center">
+  <div id="emotionLabel"
+       class="text-4xl md:text-5xl font-bold tracking-tight">
+    —
+  </div>
+  <div id="emotionConfidence"
+       class="mt-2 text-sm md:text-base text-gray-400">
+    —
+  </div>
 </div>
+
+
 
 <script>
 /* =======================
@@ -56,7 +66,7 @@ const overlay = document.getElementById("overlay");
 const octx = overlay.getContext("2d");
 
 const canvas = document.getElementById("debugCanvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 const faceCanvas = document.createElement("canvas");
 const faceCtx = faceCanvas.getContext("2d");
@@ -76,7 +86,19 @@ let faceModel = null;
 let session = null;
 let lastFaceBox = null;
 let lastFaceCheck = 0;
-const SQUARE_PADDING = 1.15; // scale the square slightly larger than detected box
+const SQUARE_PADDING = 1.0; // scale the square slightly larger than detected box
+
+// UI update rate limiting
+let lastUIUpdate = 0;
+const UI_UPDATE_MS = 300;
+
+// Emotion stability filtering
+const STABLE_FRAMES = 5;   // Number of consecutive frames required to accept a new emotion
+
+let displayedEmotion = null;   // Emotion currently shown in the UI
+let candidateEmotion = null;   // Potential new emotion
+let candidateCount = 0;        // How many times the candidate was seen consecutively
+
 
 /* =======================
    LOAD MODELS
@@ -155,7 +177,7 @@ async function processFrame() {
   }
 
   /* ---- Face detection (throttled) ---- */
-  if (Date.now() - lastFaceCheck > 300) {
+  if (Date.now() - lastFaceCheck > 600) {
     lastFaceCheck = Date.now();
     const faces = await faceModel.estimateFaces(video, false);
 
@@ -201,10 +223,10 @@ async function processFrame() {
       }
     }
   }
-// ---- Overlay ----
-octx.clearRect(0, 0, overlay.width, overlay.height);
+  // ---- Overlay ----
+  octx.clearRect(0, 0, overlay.width, overlay.height);
 
-if (lastFaceBox) {
+  if (lastFaceBox) {
   // Draw using the overlay's internal canvas coordinate space (which we set
   // to match the video's natural pixel size). Map face box from video pixels
   // to canvas pixels using a simple scale (normally 1), keeping it robust.
@@ -273,28 +295,85 @@ ctx.putImageData(imageData, 0, 0);
 
 
 
-  /* ---- ONNX inference ---- */
-  if (session) {
-    const tensor = new ort.Tensor("float32", input, [1, 48, 48, 1]);
-    const feeds = {};
-    feeds[session.inputNames[0]] = tensor;
+/* ---- ONNX inference ---- */
+if (session) {
+// Create ONNX tensor (model input stays unchanged)
+const tensor = new ort.Tensor("float32", input, [1, 48, 48, 1]);
+const feeds = {};
+feeds[session.inputNames[0]] = tensor;
 
-    const results = await session.run(feeds);
-    const scores = Array.from(results[session.outputNames[0]].data);
+// Run inference
+const results = await session.run(feeds);
+const scores = Array.from(results[session.outputNames[0]].data);
 
-    scoreHistory.push(scores);
-    if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
+// Temporal smoothing of softmax outputs
+scoreHistory.push(scores);
+if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
 
-    const avg = scores.map((_, i) =>
-      scoreHistory.reduce((s, v) => s + v[i], 0) / scoreHistory.length
-    );
+const avg = scores.map((_, i) =>
+  scoreHistory.reduce((s, v) => s + v[i], 0) / scoreHistory.length
+);
 
-    const maxIdx = avg.indexOf(Math.max(...avg));
-    const confidence = (avg[maxIdx] * 100).toFixed(1);
+// Current raw prediction
+const maxIdx = avg.indexOf(Math.max(...avg));
+const currentEmotion = EMOTIONS[maxIdx];
 
-    document.getElementById("emotion").innerText =
-      `Emotion: ${EMOTIONS[maxIdx]} (${confidence}%)`;
+  /* ------------------------------
+    Emotion stability gate
+  ------------------------------ */
+
+  if (currentEmotion === displayedEmotion) {
+    // Emotion is stable, reset candidate state
+    candidateEmotion = null;
+    candidateCount = 0;
+
+  } else {
+    if (currentEmotion === candidateEmotion) {
+      candidateCount++;
+
+      // Accept new emotion only after N stable frames
+      if (candidateCount >= STABLE_FRAMES) {
+        displayedEmotion = currentEmotion;
+        candidateEmotion = null;
+        candidateCount = 0;
+      }
+
+    } else {
+      // New candidate emotion detected
+      candidateEmotion = currentEmotion;
+      candidateCount = 1;
+    }
   }
+
+  /* ------------------------------
+     UI update (rate-limited)
+     ------------------------------ */
+
+  const now = Date.now();
+  // Initialize displayed emotion on first prediction
+  if (!displayedEmotion) {
+    displayedEmotion = currentEmotion;
+  }
+    // Update UI only if emotion is stable and rate limit has passed
+    const labelEl = document.getElementById("emotionLabel");
+    const confEl  = document.getElementById("emotionConfidence");
+
+    // Confidence based on smoothed softmax
+    const confidencePercent = Math.round(avg[maxIdx] * 100);
+
+    // Human-readable confidence levels
+    let confidenceText = "uncertain";
+    if (confidencePercent >= 70) confidenceText = "confident";
+    if (confidencePercent >= 85) confidenceText = "very confident";
+
+    // Update UI (two-line display)
+    labelEl.textContent = displayedEmotion;
+    confEl.textContent =
+      `Confidence: ${confidenceText} (${confidencePercent}%)`;
+
+    lastUIUpdate = now;
+  }
+  
 
   requestAnimationFrame(processFrame);
 }
