@@ -69,6 +69,9 @@ const EMOTIONS = [
 const SMOOTHING = 5;
 let scoreHistory = [];
 
+const FACE_HOLD_MS = 1000;
+let lastFaceTime = 0;
+
 let faceModel = null;
 let session = null;
 let lastFaceBox = null;
@@ -152,7 +155,7 @@ async function processFrame() {
   }
 
   /* ---- Face detection (throttled) ---- */
-  if (Date.now() - lastFaceCheck > 500) {
+  if (Date.now() - lastFaceCheck > 300) {
     lastFaceCheck = Date.now();
     const faces = await faceModel.estimateFaces(video, false);
 
@@ -191,11 +194,13 @@ async function processFrame() {
         w: size,
         h: size
       };
+      lastFaceTime = Date.now();
     } else {
-      lastFaceBox = null;
+      if (Date.now() - lastFaceTime > FACE_HOLD_MS) {
+        lastFaceBox = null;
+      }
     }
   }
-
 // ---- Overlay ----
 octx.clearRect(0, 0, overlay.width, overlay.height);
 
