@@ -1,14 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Andy – ML Portfolio</title>
-</head>
-<body>
-  <h1>Hi, ich bin Andy</h1>
-  <p>Machine Learning & Emotion Recognition</p>
+  <meta charset="utf-8" />
+  <title>Emotion Recognition – Browser Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <h2>Projekte</h2>
-  <a href="demo.html">Emotion Demo</a><br>
-  <a href="cv.html">Lebenslauf</a>
-</body>
-</html>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Minimal favicon -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230f172a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='10' fill='%23fff'%3E🙂%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- =======================
+       HEADER
+  ======================== -->
+  <header class="border-b border-gray-800">
+    <div class="max-w-5xl mx-auto px-6 py-6 flex justify-between items-center">
+      <div class="text-lg font-semibold tracking-tight">
+        Emotion Recognition
+      </div>
+      <nav class="flex gap-6 text-sm text-gray-300">
+        <a href="#about" class="hover:text-white">About</a>
+        <a href="#tech" class="hover:text-white">Tech</a>
+        <a href="demo.html" class="hover:text-white">Demo</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- =======================
+       HERO
+  ======================== -->
+  <section class="max-w-5xl mx-auto px-6 pt-20 pb-16">
+    <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-6">
+      Real-Time Emotion Recognition<br class="hidden md:block" />
+      <span class="text-indigo-400">Directly in the Browser</span>
+    </h1>
+
+    <p class="text-gray-300 text-lg max-w-3xl mb-10">
+      A fully client-side facial emotion recognition demo using a
+      CNN trained on 48×48 grayscale images and executed via
+      <span class="text-gray-100 font-medium">ONNX Runtime Web</span>.
+      No backend. No uploads. No tracking.
+    </p>
+
+    <div class="flex flex-wrap gap-4">
+      <a href="demo.html"
+         class="bg-indigo-600 hover:bg-indigo-500 transition px-6 py-3 rounded-lg font-semibold">
+        Launch Live Demo
+      </a>
+
+      <a href="#tech"
+         class="border border-gray-700 hover:border-gray-500 transition px-6 py-3 rounded-lg">
+        Technical Details
+      </a>
+    </div>
+  </section>
+
+  <!-- =======================
+       ABOUT
+  ======================== -->
+  <section id="about" class="border-t border-gray-800">
+    <div class="max-w-5xl mx-auto px-6 py-16">
+      <h2 class="text-2xl font-semibold mb-6">
+        Project Overview
+      </h2>
+
+      <p class="text-g
