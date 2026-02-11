@@ -149,8 +149,13 @@ async function startCamera() {
     processFrame();
   } catch (err) {
     console.error('Error accessing camera', err);
-    document.getElementById('emotion').innerText = `Camera error: ${err.name || err.message}`;
-  }
+  
+    const labelEl = document.getElementById("emotionLabel");
+    const confEl  = document.getElementById("emotionConfidence");
+  
+    if (labelEl) labelEl.textContent = "Camera not available";
+    if (confEl)  confEl.textContent = err.name || err.message;
+    }
 }
 
 /* =======================
@@ -393,4 +398,5 @@ const currentEmotion = EMOTIONS[maxIdx];
 
 </body>
 </html>
+
 
