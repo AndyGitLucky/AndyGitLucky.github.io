@@ -69,3 +69,79 @@
       </h2>
 
       <p class="text-g
+    <!-- =======================
+       TECHNICAL DETAILS
+  ======================== -->
+  <section id="tech" class="border-t border-gray-800">
+    <div class="max-w-5xl mx-auto px-6 py-20">
+
+      <h2 class="text-2xl font-semibold mb-10">
+        Technical Details
+      </h2>
+
+      <div class="grid md:grid-cols-2 gap-12">
+
+        <!-- MODEL -->
+        <div>
+          <h3 class="text-lg font-semibold text-indigo-400 mb-4">
+            Model Architecture
+          </h3>
+
+          <ul class="space-y-2 text-sm text-gray-300">
+            <li>Input: 48×48 grayscale</li>
+            <li>Conv(32) → BN → ReLU → MaxPool</li>
+            <li>Conv(64) → BN → ReLU → MaxPool</li>
+            <li>Conv(128) → BN → ReLU → MaxPool</li>
+            <li>Conv(64) → BN → ReLU → Dropout(0.4)</li>
+            <li>GlobalAveragePooling</li>
+            <li>Dense(7) → Softmax</li>
+          </ul>
+        </div>
+
+        <!-- TRAINING -->
+        <div>
+          <h3 class="text-lg font-semibold text-emerald-400 mb-4">
+            Training Strategy
+          </h3>
+
+          <ul class="space-y-2 text-sm text-gray-300">
+            <li>Balanced FER-based dataset</li>
+            <li>Online augmentation</li>
+            <li>Adam optimizer</li>
+            <li>Label smoothing (0.05)</li>
+            <li>BatchNorm regularization</li>
+            <li>Metric-based best model promotion</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- INFERENCE -->
+      <div class="mt-16">
+        <h3 class="text-lg font-semibold text-cyan-400 mb-6">
+          Browser Inference Pipeline
+        </h3>
+
+        <div class="grid md:grid-cols-3 gap-6 text-sm text-gray-300">
+
+          <div class="bg-gray-900 p-6 rounded-xl border border-gray-800">
+            <p class="font-semibold mb-2 text-white">1. Face Detection</p>
+            BlazeFace detects the face ROI directly in the browser.
+          </div>
+
+          <div class="bg-gray-900 p-6 rounded-xl border border-gray-800">
+            <p class="font-semibold mb-2 text-white">2. Preprocessing</p>
+            Crop → Resize (48×48) → Grayscale → Normalize [0,1].
+          </div>
+
+          <div class="bg-gray-900 p-6 rounded-xl border border-gray-800">
+            <p class="font-semibold mb-2 text-white">3. ONNX Inference</p>
+            Fully client-side execution with temporal smoothing
+            and stability gating.
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
