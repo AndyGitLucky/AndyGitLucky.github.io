@@ -196,10 +196,8 @@ async function processFrame() {
   /* ---- Face detection (throttled) ---- */
   if (Date.now() - lastFaceCheck > 600) {
     lastFaceCheck = Date.now();
-    const faces = await tf.tidy(() => 
-      faceModel.estimateFaces(video, false)
-    );
-
+    
+    const faces = await faceModel.estimateFaces(video, false);
 
     if (faces.length > 0) {
       const f = faces[0]; 
@@ -398,6 +396,7 @@ const currentEmotion = EMOTIONS[maxIdx];
 
 </body>
 </html>
+
 
 
 
