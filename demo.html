@@ -117,8 +117,8 @@ const INFERENCE_MS = 500;   // 2 FPS
 
 async function loadModels() {
   console.log("Initializing TFJS backend...");
-  await tf.setBackend("webgl");
-  //await tf.setBackend("cpu");
+  //await tf.setBackend("webgl");
+  await tf.setBackend("cpu");
   await tf.ready();
 
   console.log("Loading BlazeFace…");
@@ -396,6 +396,7 @@ const currentEmotion = EMOTIONS[maxIdx];
 
 </body>
 </html>
+
 
 
 
