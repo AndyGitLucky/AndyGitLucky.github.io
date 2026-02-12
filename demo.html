@@ -307,12 +307,12 @@ ctx.putImageData(imageData, 0, 0);
 /* ---- ONNX inference ---- */
 if (session) {
 // Create ONNX tensor (model input stays unchanged)
-const tensor = new ort.Tensor("float32", input, [1, 48, 48, 1]);
-const feeds = {};
-feeds[session.inputNames[0]] = tensor;
+//const tensor = new ort.Tensor("float32", input, [1, 48, 48, 1]);
+//const feeds = {};
+//feeds[session.inputNames[0]] = tensor;
 
 // Run inference
-const results = await session.run(feeds);
+//const results = await session.run(feeds);
 const scores = Array.from(results[session.outputNames[0]].data);
 
 // Temporal smoothing of softmax outputs
@@ -399,6 +399,7 @@ const currentEmotion = EMOTIONS[maxIdx];
 
 </body>
 </html>
+
 
 
 
