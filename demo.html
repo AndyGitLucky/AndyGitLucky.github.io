@@ -81,29 +81,30 @@ const EMOTIONS = [
   "Happy", "Sad", "Surprised", "Neutral"
 ];
 
-// Mobile detection for performance tuning
+// Device detection
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 // Pre-allocated buffers (prevents garbage collection pressure)
-const input = new Float32Array(48 * 48);  // Model input buffer
+const input = new Float32Array(48 * 48);
 
-// Score smoothing: pre-allocate circular buffer of Float32Arrays
-const SMOOTHING = 5;
+// Score smoothing: reduced for faster response (2 frames × 400ms = 800ms)
+const SMOOTHING = 2;  // Reduced from 5 for faster emotion updates
 const scoreBuffers = Array.from({ length: SMOOTHING }, () => new Float32Array(7));
 let scoreIndex = 0;
 
 // Face detection configuration
-const FACE_HOLD_MS = 1000;  // Keep last face for 1s after losing detection
-const SQUARE_PADDING = 1.0;  // Padding factor for face bounding box
+const FACE_HOLD_MS = 1000;
+const SQUARE_PADDING = 1.0;
 let lastFaceTime = 0;
 let lastFaceBox = null;
 let lastFaceCheck = 0;
 
 // Emotion stability: require new emotion to be stable before displaying
-const STABLE_TIME = 700;  // milliseconds
+const STABLE_TIME = 400;  // Reduced from 700ms for faster updates (max ~1 second total)
 let candidateSince = 0;
-let displayedEmotion = null;   // Currently shown emotion
-let candidateEmotion = null;   // Potential new emotion
+let displayedEmotion = null;
+let candidateEmotion = null;
 
 // Model references
 let faceModel = null;
@@ -112,9 +113,9 @@ let session = null;
 // Reusable ONNX tensor (prevents WASM heap growth)
 let tensor = new ort.Tensor("float32", new Float32Array(48*48), [1,48,48,1]);
 
-// Throttling for performance
+// Throttling for performance (faster for better responsiveness)
 let lastInference = 0;
-const INFERENCE_MS = isMobile ? 700 : 500;  // Slower on mobile (2 FPS vs 1.4 FPS)
+const INFERENCE_MS = isMobile ? 500 : 400;  // ~2 FPS on mobile, 2.5 FPS on desktop
 
 /* =======================
    LOAD MODELS
@@ -122,25 +123,25 @@ const INFERENCE_MS = isMobile ? 700 : 500;  // Slower on mobile (2 FPS vs 1.4 FP
 
 async function loadModels() {
   try {
-    console.log("Initializing TensorFlow.js backend...");
+    console.log("Loading models...");
     
-    // WebGL is faster than CPU on most devices
-    await tf.setBackend("webgl");
+    // iOS Safari has issues with WebGL - use CPU backend
+    if (isIOS) {
+      console.log("iOS detected - using CPU backend for stability");
+      await tf.setBackend("cpu");
+    } else {
+      await tf.setBackend("webgl");
+    }
     await tf.ready();
-    
-    console.log("✓ TF Backend:", tf.getBackend());
+    console.log("TF Backend:", tf.getBackend());
 
-    console.log("Loading BlazeFace...");
     faceModel = await blazeface.load();
-    console.log("✓ BlazeFace loaded");
-
-    console.log("Loading ONNX emotion model...");
     session = await ort.InferenceSession.create("emotion_model.onnx");
-    console.log("✓ ONNX model loaded");
+    
+    console.log("✓ Models loaded successfully");
   } catch (err) {
     console.error("✗ Model loading failed:", err);
     
-    // Show user-friendly error
     const labelEl = document.getElementById("emotionLabel");
     const confEl = document.getElementById("emotionConfidence");
     
@@ -163,16 +164,13 @@ async function loadModels() {
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    console.log('✓ Camera stream obtained');
     video.srcObject = stream;
 
-    // Wait for video metadata to be loaded
     await new Promise((resolve) => {
       if (video.readyState >= 1) return resolve();
       video.addEventListener('loadedmetadata', resolve, { once: true });
     });
 
-    // Size overlay canvas to match video dimensions
     overlay.width = video.videoWidth || overlay.width;
     overlay.height = video.videoHeight || overlay.height;
     const videoRect = video.getBoundingClientRect();
@@ -180,11 +178,11 @@ async function startCamera() {
     overlay.style.height = `${videoRect.height}px`;
 
     await video.play();
-    console.log('✓ Camera started');
+    console.log("✓ Camera started");
     
     processFrame();
   } catch (err) {
-    console.error('✗ Error accessing camera:', err);
+    console.error("✗ Camera error:", err);
   
     const labelEl = document.getElementById("emotionLabel");
     const confEl = document.getElementById("emotionConfidence");
@@ -199,13 +197,12 @@ async function startCamera() {
 ======================= */
 
 async function processFrame() {
-  // Wait for video to be ready
   if (video.videoWidth === 0 || video.videoHeight === 0) {
     setTimeout(() => requestAnimationFrame(processFrame), 150);
     return;
   }
 
-  // Ensure overlay stays synchronized with video dimensions
+  // Ensure overlay stays synchronized with video
   const videoRect = video.getBoundingClientRect();
   if (
     overlay.width !== video.videoWidth ||
@@ -220,13 +217,12 @@ async function processFrame() {
   }
 
   /* ==========================================
-     FACE DETECTION (throttled to ~1.67 FPS)
+     FACE DETECTION
   ========================================== */
   if (Date.now() - lastFaceCheck > 600) {
     lastFaceCheck = Date.now();
     
     try {
-      // BlazeFace handles its own tensor cleanup
       const faces = await faceModel.estimateFaces(video, false);
 
       if (faces.length > 0) {
@@ -234,27 +230,22 @@ async function processFrame() {
         const [x1, y1] = f.topLeft;
         const [x2, y2] = f.bottomRight;
 
-        // Calculate detected face dimensions
         let x = x1;
         let y = y1;
         let w = Math.max(1, x2 - x1);
         let h = Math.max(1, y2 - y1);
 
-        // Make bounding box square (model expects square input)
         let size = Math.max(w, h) * SQUARE_PADDING;
 
-        // Clamp to video dimensions
         const vw = video.videoWidth || overlay.width || 1;
         const vh = video.videoHeight || overlay.height || 1;
         if (size > Math.min(vw, vh)) size = Math.min(vw, vh);
 
-        // Center square on detected face
         const cx = x + w / 2;
         const cy = y + h / 2;
         let sx = Math.max(0, cx - size / 2);
         let sy = Math.max(0, cy - size / 2);
 
-        // Ensure box stays within video bounds
         if (sx + size > vw) sx = Math.max(0, vw - size);
         if (sy + size > vh) sy = Math.max(0, vh - size);
 
@@ -266,13 +257,12 @@ async function processFrame() {
         };
         lastFaceTime = Date.now();
       } else {
-        // Keep last face box for FACE_HOLD_MS after losing detection
         if (Date.now() - lastFaceTime > FACE_HOLD_MS) {
           lastFaceBox = null;
         }
       }
     } catch (err) {
-      console.error('✗ Face detection error:', err);
+      console.error("✗ Face detection error:", err);
     }
   }
 
@@ -282,7 +272,6 @@ async function processFrame() {
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
   if (lastFaceBox) {
-    // Scale coordinates from video pixels to canvas pixels
     const scaleX = overlay.width / video.videoWidth;
     const scaleY = overlay.height / video.videoHeight;
 
@@ -297,7 +286,6 @@ async function processFrame() {
     );
   }
 
-  // No face detected, skip inference
   if (!lastFaceBox) {
     requestAnimationFrame(processFrame);
     return;
@@ -306,7 +294,6 @@ async function processFrame() {
   /* ==========================================
      CROP FACE FROM VIDEO
   ========================================== */
-  // Draw detected face region to fixed-size canvas
   faceCtx.drawImage(
     video,
     lastFaceBox.x, lastFaceBox.y,
@@ -316,56 +303,50 @@ async function processFrame() {
   );
 
   /* ==========================================
-     EMOTION INFERENCE (throttled to 2 FPS / 1.4 FPS on mobile)
+     EMOTION INFERENCE
   ========================================== */
   if (session && Date.now() - lastInference > INFERENCE_MS) {
     lastInference = Date.now();
 
-    // Resize cropped face to 48x48 (model input size)
+    // Resize to 48x48
     ctx.drawImage(faceCanvas, 0, 0, 48, 48);
 
-    // Get pixel data
     const imageData = ctx.getImageData(0, 0, 48, 48);
     const data = imageData.data;
 
-    // Convert to grayscale and normalize to [0, 1]
+    // Convert to grayscale and normalize
     for (let i = 0, j = 0; i < data.length; i += 4, j++) {
       const gray =
-        0.299 * data[i] +      // Red
-        0.587 * data[i + 1] +  // Green
-        0.114 * data[i + 2];   // Blue
+        0.299 * data[i] +
+        0.587 * data[i + 1] +
+        0.114 * data[i + 2];
 
       const norm = gray / 255.0;
       input[j] = norm;
 
-      // Update debug canvas to show what model sees
       const g = Math.round(norm * 255);
       data[i]     = g;
       data[i + 1] = g;
       data[i + 2] = g;
     }
 
-    // Update debug canvas (only during inference, not every frame)
     ctx.putImageData(imageData, 0, 0);
 
-    // Reuse tensor (prevents WASM heap growth)
+    // Reuse tensor
     tensor.data.set(input);
 
     const feeds = {};
     feeds[session.inputNames[0]] = tensor;
 
-    // Run ONNX inference
     const results = await session.run(feeds);
     const scores = results[session.outputNames[0]].data;
 
     /* ==========================================
        TEMPORAL SMOOTHING
     ========================================== */
-    // Store scores in circular buffer (reuses allocated arrays)
     scoreBuffers[scoreIndex].set(scores);
     scoreIndex = (scoreIndex + 1) % SMOOTHING;
 
-    // Calculate smoothed average across last N predictions
     const avg = new Array(7);
     for (let i = 0; i < 7; i++) {
       let sum = 0;
@@ -375,28 +356,21 @@ async function processFrame() {
       avg[i] = sum / SMOOTHING;
     }
 
-    // Get current prediction
     const maxIdx = avg.indexOf(Math.max(...avg));
     const currentEmotion = EMOTIONS[maxIdx];
 
     /* ==========================================
        EMOTION STABILITY FILTER
     ========================================== */
-    // Require new emotion to be stable for STABLE_TIME ms before displaying
     if (currentEmotion === displayedEmotion) {
-      // Current emotion is stable, reset candidate
       candidateEmotion = null;
       candidateSince = 0;
-
     } else {
-      // Different emotion detected
       if (currentEmotion !== candidateEmotion) {
-        // New candidate emotion
         candidateEmotion = currentEmotion;
         candidateSince = Date.now();
       }
 
-      // Check if candidate has been stable long enough
       if (Date.now() - candidateSince > STABLE_TIME) {
         displayedEmotion = candidateEmotion;
         candidateEmotion = null;
@@ -406,7 +380,6 @@ async function processFrame() {
     /* ==========================================
        UPDATE UI
     ========================================== */
-    // Initialize displayed emotion on first prediction
     if (!displayedEmotion) {
       displayedEmotion = currentEmotion;
     }
@@ -414,45 +387,71 @@ async function processFrame() {
     const labelEl = document.getElementById("emotionLabel");
     const confEl = document.getElementById("emotionConfidence");
 
-    // Calculate confidence percentage
     const confidencePercent = Math.round(avg[maxIdx] * 100);
 
-    // Human-readable confidence levels
     let confidenceText = "uncertain";
     if (confidencePercent >= 70) confidenceText = "confident";
     if (confidencePercent >= 85) confidenceText = "very confident";
 
-    // Update display
     labelEl.textContent = displayedEmotion;
     confEl.textContent = `Confidence: ${confidenceText} (${confidencePercent}%)`;
   }
 
-  // Continue loop
   requestAnimationFrame(processFrame);
+}
+
+/* =======================
+   iOS-SPECIFIC FIXES
+======================= */
+
+// Prevent iOS from sleeping/throttling
+if (isIOS) {
+  // Keep a dummy audio context alive to prevent throttling
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (AudioContext) {
+    const audioCtx = new AudioContext();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0; // Silent
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    oscillator.start();
+  }
+
+  // Handle visibility change
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      console.log('Tab hidden - pausing');
+    } else {
+      console.log('Tab visible - resuming');
+    }
+  });
 }
 
 /* =======================
    MEMORY MONITORING
 ======================= */
 
-// Monitor memory usage (helpful for debugging mobile crashes)
 if (performance.memory) {
   setInterval(() => {
     const used = (performance.memory.usedJSHeapSize / 1048576).toFixed(0);
     const limit = (performance.memory.jsHeapSizeLimit / 1048576).toFixed(0);
-    console.log(`Memory: ${used}MB / ${limit}MB | TF Tensors: ${tf.memory().numTensors}`);
-  }, 10000);  // Every 10 seconds
+    console.log(`Memory: ${used}MB / ${limit}MB`);
+  }, 10000);
 }
 
 /* =======================
-   WEBGL CONTEXT LOSS HANDLER
+   ERROR HANDLERS
 ======================= */
 
-// Handle WebGL context loss (can happen on mobile under memory pressure)
 canvas.addEventListener('webglcontextlost', (event) => {
   console.error('✗ WebGL context lost');
   event.preventDefault();
 }, false);
+
+window.addEventListener('error', (event) => {
+  console.error('Global error:', event.error);
+});
 
 /* =======================
    START APPLICATION
@@ -462,9 +461,9 @@ canvas.addEventListener('webglcontextlost', (event) => {
   try {
     await loadModels();
     await startCamera();
-    console.log('✓ Application ready');
+    console.log("✓ Application ready");
   } catch (err) {
-    console.error('✗ Startup error:', err);
+    console.error("✗ Startup error:", err);
   }
 })();
 </script>
