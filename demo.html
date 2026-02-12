@@ -79,6 +79,11 @@ const EMOTIONS = [
   "Happy", "Sad", "Surprised", "Neutral"
 ];
 
+const input = new Float32Array(48 * 48);   // input Buffer
+
+faceCanvas.width = 128;
+faceCanvas.height = 128;
+
 const SMOOTHING = 5;
 let scoreHistory = [];
 
@@ -96,7 +101,8 @@ let lastUIUpdate = 0;
 const UI_UPDATE_MS = 300;
 
 // Emotion stability filtering
-const STABLE_FRAMES = 5;   // Number of consecutive frames required to accept a new emotion
+const STABLE_TIME = 700; // ms
+let candidateSince = 0;
 
 let displayedEmotion = null;   // Emotion currently shown in the UI
 let candidateEmotion = null;   // Potential new emotion
@@ -111,8 +117,8 @@ const INFERENCE_MS = 500;   // 2 FPS
 
 async function loadModels() {
   console.log("Initializing TFJS backend...");
-  //await tf.setBackend("webgl");
-  await tf.setBackend("cpu");
+  await tf.setBackend("webgl");
+  //await tf.setBackend("cpu");
   await tf.ready();
 
   console.log("Loading BlazeFace…");
@@ -190,7 +196,10 @@ async function processFrame() {
   /* ---- Face detection (throttled) ---- */
   if (Date.now() - lastFaceCheck > 600) {
     lastFaceCheck = Date.now();
-    const faces = await faceModel.estimateFaces(video, false);
+    const faces = await tf.tidy(() => 
+      faceModel.estimateFaces(video, false)
+    );
+
 
     if (faces.length > 0) {
       const f = faces[0]; 
@@ -262,9 +271,10 @@ async function processFrame() {
     return;
   }
 
-  /* ---- Face crop ---- */
-  faceCanvas.width = lastFaceBox.w;
-  faceCanvas.height = lastFaceBox.h;
+  /* ---- Face crop ---- 
+  -------is fixed and defined above now------*/
+  //faceCanvas.width = lastFaceBox.w;      
+  //faceCanvas.height = lastFaceBox.h;
 
   faceCtx.drawImage(
     video,
@@ -274,53 +284,45 @@ async function processFrame() {
     faceCanvas.width, faceCanvas.height
   );
 
-// Resize Face → 48x48
-ctx.drawImage(faceCanvas, 0, 0, 48, 48);
-
-// RGB lesen
-const imageData = ctx.getImageData(0, 0, 48, 48);
-const data = imageData.data;
-
-// DAS ist der Modell-Input (Single Source of Truth)
-const input = new Float32Array(48 * 48);
-
-// Grayscale + Normalisierung
-for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-  const gray =
-    0.299 * data[i] +
-    0.587 * data[i + 1] +
-    0.114 * data[i + 2];
-
-  const norm = gray / 255.0;
-  input[j] = norm;
-
-  // 🔥 WICHTIG: Debug-Canvas exakt auf Modell-Input setzen
-  const g = Math.round(norm * 255);
-  data[i]     = g;
-  data[i + 1] = g;
-  data[i + 2] = g;
-}
-
-// Jetzt sieht das Canvas GENAU das, was das Modell sieht
-ctx.putImageData(imageData, 0, 0);
-
-
-
-/* ---- ONNX inference ---- */
 if (session && Date.now() - lastInference > INFERENCE_MS) {
   lastInference = Date.now();
 
-  // bestehenden Tensor wiederverwenden
+  // Resize Face → 48x48
+  ctx.drawImage(faceCanvas, 0, 0, 48, 48);
+
+  const imageData = ctx.getImageData(0, 0, 48, 48);
+  const data = imageData.data;
+
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+    const gray =
+      0.299 * data[i] +
+      0.587 * data[i + 1] +
+      0.114 * data[i + 2];
+
+    const norm = gray / 255.0;
+    input[j] = norm;
+
+    // Debug canvas optional
+    const g = Math.round(norm * 255);
+    data[i]     = g;
+    data[i + 1] = g;
+    data[i + 2] = g;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  // Tensor wiederverwenden
   tensor.data.set(input);
 
   const feeds = {};
   feeds[session.inputNames[0]] = tensor;
 
   const results = await session.run(feeds);
-  const scores = Array.from(results[session.outputNames[0]].data);
+  const scores = results[session.outputNames[0]].data;   // KEIN Array.from()
+
 
 // Temporal smoothing of softmax outputs
-scoreHistory.push(scores);
+scoreHistory.push([...scores]);
 if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
 
 const avg = scores.map((_, i) =>
@@ -335,28 +337,21 @@ const currentEmotion = EMOTIONS[maxIdx];
     Emotion stability gate
   ------------------------------ */
 
-  if (currentEmotion === displayedEmotion) {
-    // Emotion is stable, reset candidate state
-    candidateEmotion = null;
-    candidateCount = 0;
+ if (currentEmotion === displayedEmotion) {
+  candidateEmotion = null;
+  candidateSince = 0;
 
-  } else {
-    if (currentEmotion === candidateEmotion) {
-      candidateCount++;
-
-      // Accept new emotion only after N stable frames
-      if (candidateCount >= STABLE_FRAMES) {
-        displayedEmotion = currentEmotion;
-        candidateEmotion = null;
-        candidateCount = 0;
-      }
-
-    } else {
-      // New candidate emotion detected
-      candidateEmotion = currentEmotion;
-      candidateCount = 1;
-    }
+} else {
+  if (currentEmotion !== candidateEmotion) {
+    candidateEmotion = currentEmotion;
+    candidateSince = Date.now();
   }
+
+  if (Date.now() - candidateSince > STABLE_TIME) {
+    displayedEmotion = candidateEmotion;
+    candidateEmotion = null;
+  }
+}
 
   /* ------------------------------
      UI update (rate-limited)
@@ -403,6 +398,7 @@ const currentEmotion = EMOTIONS[maxIdx];
 
 </body>
 </html>
+
 
 
 
