@@ -57,97 +57,122 @@
   </div>
 </div>
 
-
-
 <script>
 /* =======================
-   SETUP
+   SETUP & CONFIGURATION
 ======================= */
 
+// DOM elements
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const octx = overlay.getContext("2d");
-
 const canvas = document.getElementById("debugCanvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
+// Face canvas (reused, fixed size to prevent reallocation)
 const faceCanvas = document.createElement("canvas");
 const faceCtx = faceCanvas.getContext("2d");
+faceCanvas.width = 128;
+faceCanvas.height = 128;
 
+// Emotion labels
 const EMOTIONS = [
   "Angry", "Disgusted", "Fearful",
   "Happy", "Sad", "Surprised", "Neutral"
 ];
 
-const input = new Float32Array(48 * 48);   // input Buffer
+// Mobile detection for performance tuning
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-faceCanvas.width = 128;
-faceCanvas.height = 128;
+// Pre-allocated buffers (prevents garbage collection pressure)
+const input = new Float32Array(48 * 48);  // Model input buffer
 
+// Score smoothing: pre-allocate circular buffer of Float32Arrays
 const SMOOTHING = 5;
-let scoreHistory = [];
+const scoreBuffers = Array.from({ length: SMOOTHING }, () => new Float32Array(7));
+let scoreIndex = 0;
 
-const FACE_HOLD_MS = 1000;
+// Face detection configuration
+const FACE_HOLD_MS = 1000;  // Keep last face for 1s after losing detection
+const SQUARE_PADDING = 1.0;  // Padding factor for face bounding box
 let lastFaceTime = 0;
-
-let faceModel = null;
-let session = null;
 let lastFaceBox = null;
 let lastFaceCheck = 0;
-const SQUARE_PADDING = 1.0; // scale the square slightly larger than detected box
 
-// UI update rate limiting
-let lastUIUpdate = 0;
-const UI_UPDATE_MS = 300;
-
-// Emotion stability filtering
-const STABLE_TIME = 700; // ms
+// Emotion stability: require new emotion to be stable before displaying
+const STABLE_TIME = 700;  // milliseconds
 let candidateSince = 0;
-
-let displayedEmotion = null;   // Emotion currently shown in the UI
+let displayedEmotion = null;   // Currently shown emotion
 let candidateEmotion = null;   // Potential new emotion
-let candidateCount = 0;        // How many times the candidate was seen consecutively
 
-let tensor = new ort.Tensor("float32", new Float32Array(48*48), [1,48,48,1]);  //  set up once to precent WASM-Heap groth
+// Model references
+let faceModel = null;
+let session = null;
+
+// Reusable ONNX tensor (prevents WASM heap growth)
+let tensor = new ort.Tensor("float32", new Float32Array(48*48), [1,48,48,1]);
+
+// Throttling for performance
 let lastInference = 0;
-const INFERENCE_MS = 500;   // 2 FPS
+const INFERENCE_MS = isMobile ? 700 : 500;  // Slower on mobile (2 FPS vs 1.4 FPS)
+
 /* =======================
    LOAD MODELS
 ======================= */
 
 async function loadModels() {
-  console.log("Initializing TFJS backend...");
-  //await tf.setBackend("webgl");
-  await tf.setBackend("cpu");
-  await tf.ready();
+  try {
+    console.log("Initializing TensorFlow.js backend...");
+    
+    // WebGL is faster than CPU on most devices
+    await tf.setBackend("webgl");
+    await tf.ready();
+    
+    console.log("✓ TF Backend:", tf.getBackend());
 
-  console.log("Loading BlazeFace…");
-  faceModel = await blazeface.load();
-  console.log("BlazeFace loaded");
+    console.log("Loading BlazeFace...");
+    faceModel = await blazeface.load();
+    console.log("✓ BlazeFace loaded");
 
-  console.log("Loading ONNX model…");
-  session = await ort.InferenceSession.create("emotion_model.onnx");
-  console.log("ONNX model loaded");
+    console.log("Loading ONNX emotion model...");
+    session = await ort.InferenceSession.create("emotion_model.onnx");
+    console.log("✓ ONNX model loaded");
+  } catch (err) {
+    console.error("✗ Model loading failed:", err);
+    
+    // Show user-friendly error
+    const labelEl = document.getElementById("emotionLabel");
+    const confEl = document.getElementById("emotionConfidence");
+    
+    if (err.message.includes("Failed to fetch") || err.message.includes("404")) {
+      if (labelEl) labelEl.textContent = "Model file not found";
+      if (confEl) confEl.textContent = "Make sure emotion_model.onnx is in the same folder";
+    } else {
+      if (labelEl) labelEl.textContent = "Error loading models";
+      if (confEl) confEl.textContent = err.message;
+    }
+    
+    throw err;
+  }
 }
 
-
 /* =======================
-   CAMERA
+   CAMERA SETUP
 ======================= */
 
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    console.log('Camera stream obtained');
+    console.log('✓ Camera stream obtained');
     video.srcObject = stream;
 
-    // Wait for metadata so video.videoWidth/videoHeight become available
+    // Wait for video metadata to be loaded
     await new Promise((resolve) => {
       if (video.readyState >= 1) return resolve();
       video.addEventListener('loadedmetadata', resolve, { once: true });
     });
 
-    // Ensure overlay is sized to the video's natural pixel size and matches CSS size
+    // Size overlay canvas to match video dimensions
     overlay.width = video.videoWidth || overlay.width;
     overlay.height = video.videoHeight || overlay.height;
     const videoRect = video.getBoundingClientRect();
@@ -155,31 +180,32 @@ async function startCamera() {
     overlay.style.height = `${videoRect.height}px`;
 
     await video.play();
+    console.log('✓ Camera started');
+    
     processFrame();
   } catch (err) {
-    console.error('Error accessing camera', err);
+    console.error('✗ Error accessing camera:', err);
   
     const labelEl = document.getElementById("emotionLabel");
-    const confEl  = document.getElementById("emotionConfidence");
+    const confEl = document.getElementById("emotionConfidence");
   
     if (labelEl) labelEl.textContent = "Camera not available";
-    if (confEl)  confEl.textContent = err.name || err.message;
-    }
+    if (confEl) confEl.textContent = err.name || err.message;
+  }
 }
 
 /* =======================
-   MAIN LOOP
+   MAIN PROCESSING LOOP
 ======================= */
 
 async function processFrame() {
+  // Wait for video to be ready
   if (video.videoWidth === 0 || video.videoHeight === 0) {
     setTimeout(() => requestAnimationFrame(processFrame), 150);
     return;
   }
 
-  // 🔧 FIX: Overlay an echtes Video koppeln
-  // Ensure the overlay canvas internal pixel size matches the video's natural pixels
-  // and set the CSS size so the canvas visually lines up with the displayed video.
+  // Ensure overlay stays synchronized with video dimensions
   const videoRect = video.getBoundingClientRect();
   if (
     overlay.width !== video.videoWidth ||
@@ -193,87 +219,94 @@ async function processFrame() {
     overlay.style.height = `${videoRect.height}px`;
   }
 
-  /* ---- Face detection (throttled) ---- */
+  /* ==========================================
+     FACE DETECTION (throttled to ~1.67 FPS)
+  ========================================== */
   if (Date.now() - lastFaceCheck > 600) {
     lastFaceCheck = Date.now();
     
-    const faces = await tf.tidy(() => faceModel.estimateFaces(video, false));
+    try {
+      // BlazeFace handles its own tensor cleanup
+      const faces = await faceModel.estimateFaces(video, false);
 
-    if (faces.length > 0) {
-      const f = faces[0]; 
-      const [x1, y1] = f.topLeft;
-      const [x2, y2] = f.bottomRight;
+      if (faces.length > 0) {
+        const f = faces[0]; 
+        const [x1, y1] = f.topLeft;
+        const [x2, y2] = f.bottomRight;
 
-      // Make the bounding box quadratic (square), centered on the detected box
-      let x = x1;
-      let y = y1;
-      let w = Math.max(1, x2 - x1);
-      let h = Math.max(1, y2 - y1);
+        // Calculate detected face dimensions
+        let x = x1;
+        let y = y1;
+        let w = Math.max(1, x2 - x1);
+        let h = Math.max(1, y2 - y1);
 
-      // choose square size from the larger dimension and apply padding
-      let size = Math.max(w, h) * SQUARE_PADDING;
+        // Make bounding box square (model expects square input)
+        let size = Math.max(w, h) * SQUARE_PADDING;
 
-      // If size exceeds video dimensions, cap it
-      const vw = video.videoWidth || overlay.width || 1;
-      const vh = video.videoHeight || overlay.height || 1;
-      if (size > Math.min(vw, vh)) size = Math.min(vw, vh);
+        // Clamp to video dimensions
+        const vw = video.videoWidth || overlay.width || 1;
+        const vh = video.videoHeight || overlay.height || 1;
+        if (size > Math.min(vw, vh)) size = Math.min(vw, vh);
 
-      // center on original box center
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      let sx = Math.max(0, cx - size / 2);
-      let sy = Math.max(0, cy - size / 2);
+        // Center square on detected face
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        let sx = Math.max(0, cx - size / 2);
+        let sy = Math.max(0, cy - size / 2);
 
-      // clamp to video bounds
-      if (sx + size > vw) sx = Math.max(0, vw - size);
-      if (sy + size > vh) sy = Math.max(0, vh - size);
+        // Ensure box stays within video bounds
+        if (sx + size > vw) sx = Math.max(0, vw - size);
+        if (sy + size > vh) sy = Math.max(0, vh - size);
 
-      lastFaceBox = {
-        x: sx,
-        y: sy,
-        w: size,
-        h: size
-      };
-      lastFaceTime = Date.now();
-    } else {
-      if (Date.now() - lastFaceTime > FACE_HOLD_MS) {
-        lastFaceBox = null;
+        lastFaceBox = {
+          x: sx,
+          y: sy,
+          w: size,
+          h: size
+        };
+        lastFaceTime = Date.now();
+      } else {
+        // Keep last face box for FACE_HOLD_MS after losing detection
+        if (Date.now() - lastFaceTime > FACE_HOLD_MS) {
+          lastFaceBox = null;
+        }
       }
+    } catch (err) {
+      console.error('✗ Face detection error:', err);
     }
   }
-  // ---- Overlay ----
+
+  /* ==========================================
+     DRAW FACE BOUNDING BOX
+  ========================================== */
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
   if (lastFaceBox) {
-  // Draw using the overlay's internal canvas coordinate space (which we set
-  // to match the video's natural pixel size). Map face box from video pixels
-  // to canvas pixels using a simple scale (normally 1), keeping it robust.
-  const scaleX = overlay.width / video.videoWidth;
-  const scaleY = overlay.height / video.videoHeight;
+    // Scale coordinates from video pixels to canvas pixels
+    const scaleX = overlay.width / video.videoWidth;
+    const scaleY = overlay.height / video.videoHeight;
 
-  octx.strokeStyle = "lime";
-  octx.lineWidth = 3;
+    octx.strokeStyle = "lime";
+    octx.lineWidth = 3;
 
-  octx.strokeRect(
-    lastFaceBox.x * scaleX,
-    lastFaceBox.y * scaleY,
-    lastFaceBox.w * scaleX,
-    lastFaceBox.h * scaleY
-  );
-}
+    octx.strokeRect(
+      lastFaceBox.x * scaleX,
+      lastFaceBox.y * scaleY,
+      lastFaceBox.w * scaleX,
+      lastFaceBox.h * scaleY
+    );
+  }
 
-
-
+  // No face detected, skip inference
   if (!lastFaceBox) {
     requestAnimationFrame(processFrame);
     return;
   }
 
-  /* ---- Face crop ---- 
-  -------is fixed and defined above now------*/
-  //faceCanvas.width = lastFaceBox.w;      
-  //faceCanvas.height = lastFaceBox.h;
-
+  /* ==========================================
+     CROP FACE FROM VIDEO
+  ========================================== */
+  // Draw detected face region to fixed-size canvas
   faceCtx.drawImage(
     video,
     lastFaceBox.x, lastFaceBox.y,
@@ -282,89 +315,106 @@ async function processFrame() {
     faceCanvas.width, faceCanvas.height
   );
 
-if (session && Date.now() - lastInference > INFERENCE_MS) {
-  lastInference = Date.now();
+  /* ==========================================
+     EMOTION INFERENCE (throttled to 2 FPS / 1.4 FPS on mobile)
+  ========================================== */
+  if (session && Date.now() - lastInference > INFERENCE_MS) {
+    lastInference = Date.now();
 
-  // Resize Face → 48x48
-  ctx.drawImage(faceCanvas, 0, 0, 48, 48);
+    // Resize cropped face to 48x48 (model input size)
+    ctx.drawImage(faceCanvas, 0, 0, 48, 48);
 
-  const imageData = ctx.getImageData(0, 0, 48, 48);
-  const data = imageData.data;
+    // Get pixel data
+    const imageData = ctx.getImageData(0, 0, 48, 48);
+    const data = imageData.data;
 
-  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-    const gray =
-      0.299 * data[i] +
-      0.587 * data[i + 1] +
-      0.114 * data[i + 2];
+    // Convert to grayscale and normalize to [0, 1]
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      const gray =
+        0.299 * data[i] +      // Red
+        0.587 * data[i + 1] +  // Green
+        0.114 * data[i + 2];   // Blue
 
-    const norm = gray / 255.0;
-    input[j] = norm;
+      const norm = gray / 255.0;
+      input[j] = norm;
 
-    // Debug canvas optional
-    const g = Math.round(norm * 255);
-    data[i]     = g;
-    data[i + 1] = g;
-    data[i + 2] = g;
-  }
+      // Update debug canvas to show what model sees
+      const g = Math.round(norm * 255);
+      data[i]     = g;
+      data[i + 1] = g;
+      data[i + 2] = g;
+    }
 
-  ctx.putImageData(imageData, 0, 0);
+    // Update debug canvas (only during inference, not every frame)
+    ctx.putImageData(imageData, 0, 0);
 
-  // Tensor wiederverwenden
-  tensor.data.set(input);
+    // Reuse tensor (prevents WASM heap growth)
+    tensor.data.set(input);
 
-  const feeds = {};
-  feeds[session.inputNames[0]] = tensor;
+    const feeds = {};
+    feeds[session.inputNames[0]] = tensor;
 
-  const results = await session.run(feeds);
-  const scores = results[session.outputNames[0]].data;   // KEIN Array.from()
+    // Run ONNX inference
+    const results = await session.run(feeds);
+    const scores = results[session.outputNames[0]].data;
 
+    /* ==========================================
+       TEMPORAL SMOOTHING
+    ========================================== */
+    // Store scores in circular buffer (reuses allocated arrays)
+    scoreBuffers[scoreIndex].set(scores);
+    scoreIndex = (scoreIndex + 1) % SMOOTHING;
 
-// Temporal smoothing of softmax outputs
-scoreHistory.push([...scores]);
-if (scoreHistory.length > SMOOTHING) scoreHistory.shift();
+    // Calculate smoothed average across last N predictions
+    const avg = new Array(7);
+    for (let i = 0; i < 7; i++) {
+      let sum = 0;
+      for (let j = 0; j < SMOOTHING; j++) {
+        sum += scoreBuffers[j][i];
+      }
+      avg[i] = sum / SMOOTHING;
+    }
 
-const avg = scores.map((_, i) =>
-  scoreHistory.reduce((s, v) => s + v[i], 0) / scoreHistory.length
-);
+    // Get current prediction
+    const maxIdx = avg.indexOf(Math.max(...avg));
+    const currentEmotion = EMOTIONS[maxIdx];
 
-// Current raw prediction
-const maxIdx = avg.indexOf(Math.max(...avg));
-const currentEmotion = EMOTIONS[maxIdx];
+    /* ==========================================
+       EMOTION STABILITY FILTER
+    ========================================== */
+    // Require new emotion to be stable for STABLE_TIME ms before displaying
+    if (currentEmotion === displayedEmotion) {
+      // Current emotion is stable, reset candidate
+      candidateEmotion = null;
+      candidateSince = 0;
 
-  /* ------------------------------
-    Emotion stability gate
-  ------------------------------ */
+    } else {
+      // Different emotion detected
+      if (currentEmotion !== candidateEmotion) {
+        // New candidate emotion
+        candidateEmotion = currentEmotion;
+        candidateSince = Date.now();
+      }
 
- if (currentEmotion === displayedEmotion) {
-  candidateEmotion = null;
-  candidateSince = 0;
+      // Check if candidate has been stable long enough
+      if (Date.now() - candidateSince > STABLE_TIME) {
+        displayedEmotion = candidateEmotion;
+        candidateEmotion = null;
+      }
+    }
 
-} else {
-  if (currentEmotion !== candidateEmotion) {
-    candidateEmotion = currentEmotion;
-    candidateSince = Date.now();
-  }
+    /* ==========================================
+       UPDATE UI
+    ========================================== */
+    // Initialize displayed emotion on first prediction
+    if (!displayedEmotion) {
+      displayedEmotion = currentEmotion;
+    }
 
-  if (Date.now() - candidateSince > STABLE_TIME) {
-    displayedEmotion = candidateEmotion;
-    candidateEmotion = null;
-  }
-}
-
-  /* ------------------------------
-     UI update (rate-limited)
-     ------------------------------ */
-
-  const now = Date.now();
-  // Initialize displayed emotion on first prediction
-  if (!displayedEmotion) {
-    displayedEmotion = currentEmotion;
-  }
-    // Update UI only if emotion is stable and rate limit has passed
     const labelEl = document.getElementById("emotionLabel");
-    const confEl  = document.getElementById("emotionConfidence");
+    const confEl = document.getElementById("emotionConfidence");
 
-    // Confidence based on smoothed softmax
+    // Calculate confidence percentage
     const confidencePercent = Math.round(avg[maxIdx] * 100);
 
     // Human-readable confidence levels
@@ -372,36 +422,52 @@ const currentEmotion = EMOTIONS[maxIdx];
     if (confidencePercent >= 70) confidenceText = "confident";
     if (confidencePercent >= 85) confidenceText = "very confident";
 
-    // Update UI (two-line display)
+    // Update display
     labelEl.textContent = displayedEmotion;
-    confEl.textContent =
-      `Confidence: ${confidenceText} (${confidencePercent}%)`;
-
-    lastUIUpdate = now;
+    confEl.textContent = `Confidence: ${confidenceText} (${confidencePercent}%)`;
   }
-  
 
+  // Continue loop
   requestAnimationFrame(processFrame);
 }
 
 /* =======================
-   START
+   MEMORY MONITORING
+======================= */
+
+// Monitor memory usage (helpful for debugging mobile crashes)
+if (performance.memory) {
+  setInterval(() => {
+    const used = (performance.memory.usedJSHeapSize / 1048576).toFixed(0);
+    const limit = (performance.memory.jsHeapSizeLimit / 1048576).toFixed(0);
+    console.log(`Memory: ${used}MB / ${limit}MB | TF Tensors: ${tf.memory().numTensors}`);
+  }, 10000);  // Every 10 seconds
+}
+
+/* =======================
+   WEBGL CONTEXT LOSS HANDLER
+======================= */
+
+// Handle WebGL context loss (can happen on mobile under memory pressure)
+canvas.addEventListener('webglcontextlost', (event) => {
+  console.error('✗ WebGL context lost');
+  event.preventDefault();
+}, false);
+
+/* =======================
+   START APPLICATION
 ======================= */
 
 (async () => {
-  await loadModels();
-  await startCamera();
+  try {
+    await loadModels();
+    await startCamera();
+    console.log('✓ Application ready');
+  } catch (err) {
+    console.error('✗ Startup error:', err);
+  }
 })();
 </script>
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
