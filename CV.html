@@ -1,2 +1,864 @@
-<h1>Lebenslauf</h1>
-<p>Wird noch ergänzt.</p>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>me | Andreas Eichmann</title>
+  <style>
+    :root {
+      --bg: #060d18;
+      --panel: rgba(12, 21, 37, 0.78);
+      --text: #f4f6fb;
+      --muted: #9aa8bf;
+      --warm: #ffb15c;
+      --warm-2: #ffd27a;
+      --warm-3: #ff8d4d;
+      --line: rgba(255, 177, 92, 0.42);
+      --serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      --sans: "Segoe UI", "Aptos", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255, 177, 92, 0.16), transparent 34%),
+        radial-gradient(circle at 50% 28%, rgba(255, 210, 122, 0.08), transparent 24%),
+        linear-gradient(180deg, #060d18 0%, #091321 58%, #060c16 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(255, 188, 120, 0.06), transparent 14%, transparent 86%, rgba(255, 188, 120, 0.04)),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: auto, 72px 72px, 72px 72px;
+      mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.92), transparent 96%);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .shell {
+      width: min(1220px, calc(100% - 32px));
+      margin: 20px auto 80px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255, 177, 92, 0.12);
+      border-radius: 22px;
+      background: rgba(8, 16, 28, 0.76);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      font-family: var(--sans);
+      font-weight: 400;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 177, 92, 0.12);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .nav a,
+    .lang-switch button,
+    .footer-link {
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 177, 92, 0.12);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+      font-size: 0.84rem;
+      cursor: pointer;
+    }
+
+    .nav a.active,
+    .lang-switch button.active,
+    .brand-mark.active {
+      color: var(--text);
+      border-color: rgba(255, 177, 92, 0.28);
+      background: rgba(255, 177, 92, 0.08);
+    }
+
+    .brand-mark.active {
+      color: #241406;
+      background: linear-gradient(135deg, var(--warm), var(--warm-2));
+      box-shadow: 0 10px 30px rgba(255, 177, 92, 0.24);
+    }
+
+    .lang-switch {
+      display: flex;
+      gap: 8px;
+    }
+
+    .lang-switch button {
+      min-width: 52px;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 46vh;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 72px 20px 46px;
+      overflow: hidden;
+    }
+
+    .beam {
+      position: absolute;
+      top: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(520px, 70vw);
+      height: 360px;
+      background: radial-gradient(circle at 50% 0%, rgba(255, 210, 122, 0.52), rgba(255, 177, 92, 0.12) 36%, transparent 72%);
+      filter: blur(14px);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 177, 92, 0.2);
+      background: rgba(255, 177, 92, 0.08);
+      color: var(--warm-2);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 0.78rem;
+    }
+
+    h1 {
+      margin: 18px 0 0;
+      font-family: var(--serif);
+      font-size: clamp(3rem, 9vw, 5.8rem);
+      letter-spacing: -0.06em;
+      line-height: 0.92;
+    }
+
+    .hero-meta {
+      margin-top: 22px;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 0.76rem;
+    }
+
+    .hero-credit {
+      margin-top: 14px;
+      color: rgba(154, 168, 191, 0.88);
+      font-size: 0.9rem;
+      letter-spacing: 0.02em;
+    }
+
+    .timeline-wrap {
+      position: relative;
+      padding-top: 64px;
+      padding-bottom: 42vh;
+    }
+
+    .timeline-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      transform: translateX(-50%);
+      background: linear-gradient(180deg, transparent 0%, var(--line) 7%, var(--line) 93%, transparent 100%);
+      box-shadow: 0 0 32px rgba(255, 177, 92, 0.16);
+    }
+
+    .entry {
+      min-height: 240px;
+      display: grid;
+      grid-template-columns: 1fr 120px 1fr;
+      align-items: center;
+      gap: 18px;
+      margin: 0 0 10px;
+    }
+
+    .entry-dot {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: center;
+      justify-self: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, var(--warm-2), var(--warm-3));
+      box-shadow:
+        0 0 0 5px rgba(255, 177, 92, 0.10),
+        0 0 22px rgba(255, 177, 92, 0.24);
+      z-index: 2;
+    }
+
+    .year {
+      grid-row: 1;
+      align-self: center;
+      color: var(--warm-2);
+      font-size: 0.78rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .entry.left .year {
+      grid-column: 3;
+      justify-self: start;
+      padding-left: 8px;
+    }
+
+    .entry.right .year {
+      grid-column: 1;
+      justify-self: end;
+      padding-right: 8px;
+    }
+
+    .note {
+      position: relative;
+      max-width: 430px;
+      padding: 22px 22px 20px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 177, 92, 0.12);
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+      opacity: 0.18;
+      transform: translateY(34px) scale(0.985);
+      transition: opacity 480ms ease, transform 480ms ease, border-color 280ms ease, background 280ms ease;
+    }
+
+    .entry.is-visible .note {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      border-color: rgba(255, 177, 92, 0.26);
+      background: linear-gradient(180deg, rgba(16, 28, 46, 0.96), rgba(10, 18, 32, 0.94));
+    }
+
+    .note::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 52px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255, 177, 92, 0), rgba(255, 177, 92, 0.65));
+    }
+
+    .entry.left .note {
+      grid-column: 1;
+      justify-self: end;
+      text-align: right;
+    }
+
+    .entry.left .note::before {
+      right: -52px;
+    }
+
+    .entry.right .note {
+      grid-column: 3;
+      justify-self: start;
+      text-align: left;
+    }
+
+    .entry.right .note::before {
+      left: -52px;
+      transform: scaleX(-1);
+    }
+
+    .label {
+      color: var(--warm);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+    }
+
+    .note h2 {
+      margin: 10px 0 0;
+      font-family: var(--serif);
+      font-size: clamp(1.35rem, 2.6vw, 2.05rem);
+      line-height: 1.08;
+      text-wrap: balance;
+      overflow-wrap: anywhere;
+      hyphens: auto;
+    }
+
+    .role {
+      margin-top: 8px;
+      color: rgba(244, 246, 251, 0.84);
+      font-size: 1rem;
+    }
+
+    .copy {
+      margin-top: 14px;
+      color: var(--muted);
+      line-height: 1.72;
+      font-size: 0.98rem;
+      overflow-wrap: anywhere;
+      hyphens: auto;
+    }
+
+    .tags {
+      margin-top: 14px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: inherit;
+    }
+
+    .tag {
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 177, 92, 0.10);
+      background: rgba(255, 255, 255, 0.04);
+      color: #dfe7f5;
+      font-size: 0.78rem;
+    }
+
+    .footer-rail {
+      display: grid;
+      place-items: center;
+      margin-top: 96px;
+    }
+
+    .footer-link {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      font-size: 0;
+      background: linear-gradient(180deg, var(--warm-2), var(--warm-3));
+      border-color: rgba(255, 177, 92, 0.30);
+      box-shadow:
+        0 0 0 7px rgba(255, 177, 92, 0.10),
+        0 0 28px rgba(255, 177, 92, 0.24);
+      color: transparent;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 980px) {
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .toolbar {
+        justify-content: space-between;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .timeline-line {
+        left: 18px;
+        transform: none;
+      }
+
+      .entry {
+        grid-template-columns: 36px 1fr;
+        grid-template-rows: auto auto;
+        min-height: auto;
+        margin-bottom: 26px;
+      }
+
+      .entry-dot {
+        grid-column: 1;
+        grid-row: 2;
+        margin-top: 6px;
+      }
+
+      .year,
+      .entry.left .year,
+      .entry.right .year {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: start;
+        align-self: end;
+        padding: 0 0 6px;
+      }
+
+      .entry.left .note,
+      .entry.right .note {
+        grid-column: 2;
+        grid-row: 2;
+        justify-self: stretch;
+        text-align: left;
+      }
+
+      .entry.left .note::before,
+      .entry.right .note::before {
+        left: -36px;
+        right: auto;
+        width: 32px;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body id="top">
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <button type="button" class="brand-mark active" data-lang-btn="de">DE</button>
+        <button type="button" class="brand-mark" data-lang-btn="en">EN</button>
+      </div>
+      <div class="toolbar">
+        <nav class="nav">
+          <a href="index.html" data-i18n="nav_about">about</a>
+          <a href="index.html#tech" data-i18n="nav_tech">tech</a>
+          <a href="CV.html" class="active">me</a>
+          <a href="demo.html" data-i18n="nav_demo">demo</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="beam"></div>
+      <div>
+        <div class="eyebrow" data-i18n="hero_eyebrow">Interactive CV</div>
+        <h1>Andreas Eichmann</h1>
+        <div class="hero-meta" data-i18n="hero_meta">Munich - Applied AI / ML Engineer - Hardware to AI</div>
+        <div class="hero-credit" data-i18n="hero_credit">Created by me with the help of Codex</div>
+      </div>
+    </section>
+
+    <section class="timeline-wrap">
+      <div class="timeline-line" aria-hidden="true"></div>
+
+      <article class="entry right is-visible">
+        <div class="year">2026</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="autoresearch_label">Model improvement</div>
+          <h2 data-i18n="autoresearch_title">Model improvement with AutoResearch</h2>
+          <div class="role" data-i18n="autoresearch_role">Iterative refinement, evaluation, and research-guided tuning</div>
+          <div class="copy" data-i18n="autoresearch_copy">
+            Focused on improving the model systematically with the help of AutoResearch: tighter iteration loops, better comparison of variants, and more deliberate refinement of what actually improves performance.
+          </div>
+          <div class="tags">
+            <span class="tag" data-i18n="tag_research">research</span>
+            <span class="tag" data-i18n="tag_iteration">iteration</span>
+            <span class="tag" data-i18n="tag_evaluation">evaluation</span>
+            <span class="tag" data-i18n="tag_modeling">modeling</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry left">
+        <div class="year">2026</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="jobsearch_label">Applied AI system</div>
+          <h2 data-i18n="jobsearch_title">Job search and review workbench</h2>
+          <div class="role" data-i18n="jobsearch_role">Discovery, scoring, review UI, and application flow</div>
+          <div class="copy" data-i18n="jobsearch_copy">
+            Built a job search system that combines multi-source discovery, scoring, validation, human review, and application artifact generation. The project connects search breadth with practical decision support instead of just collecting links.
+          </div>
+          <div class="tags">
+            <span class="tag" data-i18n="tag_discovery">discovery</span>
+            <span class="tag" data-i18n="tag_scoring">scoring</span>
+            <span class="tag" data-i18n="tag_review">review ui</span>
+            <span class="tag" data-i18n="tag_pipeline">pipeline</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry right">
+        <div class="year">2026</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="onnx_label">Portable inference</div>
+          <h2 data-i18n="onnx_title">Browser-based ONNX demo</h2>
+          <div class="role" data-i18n="onnx_role">Client-side inference with BlazeFace</div>
+          <div class="copy" data-i18n="onnx_copy">
+            The model leaves the training environment and becomes a browser experience. The emphasis shifts toward deployment feel, responsiveness, and product-shaped presentation.
+          </div>
+          <div class="tags">
+            <span class="tag">onnx</span>
+            <span class="tag" data-i18n="tag_browser">browser</span>
+            <span class="tag" data-i18n="tag_realtime">realtime</span>
+            <span class="tag">demo</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry left">
+        <div class="year">2026</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="emotion_label">Project layer</div>
+          <h2 data-i18n="emotion_title">Real-time facial emotion recognition</h2>
+          <div class="role" data-i18n="emotion_role">Training pipeline, evaluation, live inference</div>
+          <div class="copy" data-i18n="emotion_copy">
+            End-to-end work across preprocessing, model training, evaluation, GPU workflows, and realtime inference. A project that makes the new direction concrete.
+          </div>
+          <div class="tags">
+            <span class="tag">tensorflow</span>
+            <span class="tag">opencv</span>
+            <span class="tag">cuda</span>
+            <span class="tag">cnn</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry right">
+        <div class="year">2023-2024</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="training_label">Pivot</div>
+          <h2 data-i18n="training_title">Data Scientist Training</h2>
+          <div class="role">alfatraining</div>
+          <div class="copy" data-i18n="training_copy">
+            The transition becomes explicit here. Broad technical experience gets redirected into data, machine learning, Python-based workflows, and a more focused AI profile.
+          </div>
+          <div class="tags">
+            <span class="tag">python</span>
+            <span class="tag">sql</span>
+            <span class="tag" data-i18n="tag_ml">machine learning</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry left">
+        <div class="year">2012-2022</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="occhio_label">Long-form craft</div>
+          <h2 data-i18n="occhio_title">Electronics Specialist</h2>
+          <div class="role">Occhio - Munich</div>
+          <div class="copy" data-i18n="occhio_copy">
+            Responsible for PCB layout, prototyping, testing, measurement, documentation, app-related product support, and technical training. This period shows sustained practical ownership across many different technical tasks.
+          </div>
+          <div class="tags">
+            <span class="tag" data-i18n="tag_pcb">pcb layout</span>
+            <span class="tag" data-i18n="tag_testing">testing</span>
+            <span class="tag" data-i18n="tag_documentation">documentation</span>
+            <span class="tag">support</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry right">
+        <div class="year">2008-2011</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="tum_label">Systems</div>
+          <h2 data-i18n="tum_title">Electrical engineering studies</h2>
+          <div class="role">TU Muenchen</div>
+          <div class="copy" data-i18n="tum_copy">
+            Fundamental studies in electrical engineering. This phase added formal systems thinking and technical depth to the already practical electronics background.
+          </div>
+          <div class="tags">
+            <span class="tag" data-i18n="tag_engineering">engineering</span>
+            <span class="tag" data-i18n="tag_systems">systems</span>
+            <span class="tag">munich</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry left">
+        <div class="year">2008</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="rittal_label">Field work</div>
+          <h2 data-i18n="rittal_title">Communications Electronics Technician</h2>
+          <div class="role">Rittal - Freiburg</div>
+          <div class="copy" data-i18n="rittal_copy">
+            Worked on wiring, cabling, adapting electrical cabinets to requirements, and supporting assembly work in an industrial hardware environment.
+          </div>
+          <div class="tags">
+            <span class="tag" data-i18n="tag_wiring">wiring</span>
+            <span class="tag" data-i18n="tag_cabling">cabling</span>
+            <span class="tag" data-i18n="tag_electrical">electrical systems</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry right">
+        <div class="year">2006-2008</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="abitur_label">School phase</div>
+          <h2 data-i18n="abitur_title">Abitur</h2>
+          <div class="role">Gertrud-Luckner-Gewerbeschule - Freiburg i. Br.</div>
+          <div class="copy" data-i18n="abitur_copy">
+            Completed the Abitur and broadened the general and technical base that later supported engineering studies and more advanced technical work.
+          </div>
+          <div class="tags">
+            <span class="tag" data-i18n="tag_education">education</span>
+            <span class="tag" data-i18n="tag_foundation">technical base</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry left">
+        <div class="year">2002-2006</div>
+        <div class="entry-dot" aria-hidden="true"></div>
+        <div class="note">
+          <div class="label" data-i18n="zlaser_label">Foundation</div>
+          <h2 data-i18n="zlaser_title">Vocational training in communications electronics</h2>
+          <div class="role">Z-Laser - Freiburg i. Br.</div>
+          <div class="copy" data-i18n="zlaser_copy">
+            Training phase with hands-on work in soldering, board assembly, wiring, and fault diagnosis. This is where the practical electronics foundation was built.
+          </div>
+          <div class="tags">
+            <span class="tag">electronics</span>
+            <span class="tag">assembly</span>
+            <span class="tag" data-i18n="tag_troubleshooting">troubleshooting</span>
+          </div>
+        </div>
+      </article>
+
+      <div class="footer-rail">
+        <a class="footer-link" href="#top">
+          <span aria-hidden="true">•</span>
+          <span class="sr-only" data-i18n="footer_start">Start</span>
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const entries = Array.from(document.querySelectorAll(".entry"));
+    const langButtons = Array.from(document.querySelectorAll("[data-lang-btn]"));
+    const translations = {
+      de: {
+        nav_about: "about",
+        nav_tech: "tech",
+        nav_demo: "demo",
+        hero_eyebrow: "Interaktiver Lebenslauf",
+        hero_meta: "München - Applied AI / ML Engineer - Hardware zu AI",
+        hero_credit: "Created by me with the help of Codex",
+        autoresearch_label: "Modellverbesserung",
+        autoresearch_title: "Verbesserung des CNN-Modells der ONNX-Online-Demo",
+        autoresearch_role: "Iterative Verfeinerung durch einen autonomen Agenten, Evaluation und forschungsgeleitetes Tuning",
+        autoresearch_copy: "Fokus auf der systematischen Verbesserung des CNN-Modells aus der ONNX-Online-Demo mit Hilfe von AutoResearch und einem autonomen Agenten: engere Iterationsschleifen, bessere Vergleichbarkeit von Varianten und gezieltere Verfeinerung dessen, was die Performance wirklich verbessert.",
+        jobsearch_label: "Applied-AI-System",
+        jobsearch_title: "Arbeitssuche- und Review-Workbench",
+        jobsearch_role: "Discovery, Scoring, Review-UI und Bewerbungsfluss",
+        jobsearch_copy: "Aufbau eines Jobsuche-Systems, das Multi-Source-Discovery, Scoring, Validierung, Human-Review und die Generierung von Bewerbungsartefakten verbindet. Das Projekt verknüpft Suchbreite mit echter Entscheidungsunterstützung statt nur Links zu sammeln.",
+        onnx_label: "Portable Inferenz",
+        onnx_title: "Browserbasierte ONNX-Demo",
+        onnx_role: "Client-seitige Inferenz mit BlazeFace",
+        onnx_copy: "Das Modell verlässt die Trainingsumgebung und wird zu einer Browser-Erfahrung. Im Vordergrund stehen Deployment-Gefühl, Reaktionsfähigkeit und eine produktnahe Präsentation.",
+        emotion_label: "Projektphase",
+        emotion_title: "Echtzeit-Emotionserkennung",
+        emotion_role: "Trainingspipeline, Evaluation, Live-Inferenz",
+        emotion_copy: "End-to-End-Arbeit über Preprocessing, Modelltraining, Evaluation, GPU-Workflows und Echtzeit-Inferenz. Das Projekt macht die neue fachliche Richtung konkret sichtbar.",
+        training_label: "Übergang",
+        training_title: "Weiterbildung Data Scientist",
+        training_copy: "Hier wird der Wechsel explizit. Breite technische Erfahrung verschiebt sich in Richtung Daten, Machine Learning, Python-Workflows und ein klareres AI-Profil.",
+        occhio_label: "Langfristige Praxis",
+        occhio_title: "Electronics Specialist",
+        occhio_copy: "Verantwortlich für PCB-Layout, Prototyping, Tests, Messungen, Dokumentation, appbezogenen Produktsupport und technische Schulungen. Diese Phase zeigt über viele Jahre verteilte praktische Verantwortung in sehr unterschiedlichen technischen Aufgaben.",
+        tum_label: "Systeme",
+        tum_title: "Studium der Elektrotechnik",
+        tum_copy: "Grundstudium der Elektrotechnik. Diese Phase brachte formales Systemdenken und technische Tiefe in den bereits praktischen Elektronik-Hintergrund.",
+        rittal_label: "Praxisstation",
+        rittal_title: "Kommunikations-<wbr>elektroniker",
+        rittal_copy: "Arbeit an Verdrahtung, Verkabelung, Anpassung von Schaltschränken an Anforderungen sowie Unterstützung bei Montagearbeiten im industriellen Hardware-Umfeld.",
+        abitur_label: "Schulphase",
+        abitur_title: "Abitur",
+        abitur_copy: "Abitur abgeschlossen und damit die allgemeine sowie technische Basis verbreitert, die später Studium und anspruchsvollere technische Arbeit getragen hat.",
+        zlaser_label: "Grundlage",
+        zlaser_title: "Ausbildung zum Kommunikations-<wbr>elektroniker",
+        zlaser_copy: "Ausbildungsphase mit praktischer Arbeit in Löten, Bestückung, Verdrahtung und Fehlersuche. Hier wurde das handfeste Elektronik-Fundament gelegt.",
+        tag_browser: "browser",
+        tag_realtime: "echtzeit",
+        tag_ml: "machine learning",
+        tag_discovery: "discovery",
+        tag_scoring: "scoring",
+        tag_review: "review ui",
+        tag_pipeline: "pipeline",
+        tag_research: "research",
+        tag_iteration: "iteration",
+        tag_evaluation: "evaluation",
+        tag_modeling: "modellierung",
+        tag_pcb: "pcb layout",
+        tag_testing: "tests",
+        tag_documentation: "dokumentation",
+        tag_engineering: "engineering",
+        tag_systems: "systeme",
+        tag_wiring: "verdrahtung",
+        tag_cabling: "verkabelung",
+        tag_electrical: "elektrische systeme",
+        tag_education: "bildung",
+        tag_foundation: "technische basis",
+        tag_troubleshooting: "fehlersuche",
+        footer_start: "Start"
+      },
+      en: {
+        nav_about: "about",
+        nav_tech: "tech",
+        nav_demo: "demo",
+        hero_eyebrow: "Interactive CV",
+        hero_meta: "Munich - Applied AI / ML Engineer - Hardware to AI",
+        hero_credit: "Created by me with the help of Codex",
+        autoresearch_label: "Model improvement",
+        autoresearch_title: "Improving the CNN model behind the ONNX online demo",
+        autoresearch_role: "Iterative refinement through an autonomous agent, evaluation, and research-guided tuning",
+        autoresearch_copy: "Focused on improving the CNN model used in the ONNX online demo with the help of AutoResearch and an autonomous agent: tighter iteration loops, better comparison of variants, and more deliberate refinement of what actually improves performance.",
+        jobsearch_label: "Applied AI system",
+        jobsearch_title: "Job search and review workbench",
+        jobsearch_role: "Discovery, scoring, review UI, and application flow",
+        jobsearch_copy: "Built a job search system that combines multi-source discovery, scoring, validation, human review, and application artifact generation. The project connects search breadth with practical decision support instead of just collecting links.",
+        onnx_label: "Portable inference",
+        onnx_title: "Browser-based ONNX demo",
+        onnx_role: "Client-side inference with BlazeFace",
+        onnx_copy: "The model leaves the training environment and becomes a browser experience. The emphasis shifts toward deployment feel, responsiveness, and product-shaped presentation.",
+        emotion_label: "Project layer",
+        emotion_title: "Real-time facial emotion recognition",
+        emotion_role: "Training pipeline, evaluation, live inference",
+        emotion_copy: "End-to-end work across preprocessing, model training, evaluation, GPU workflows, and realtime inference. This project makes the new direction concrete.",
+        training_label: "Pivot",
+        training_title: "Data Scientist Training",
+        training_copy: "This is where the transition becomes explicit. Broad technical experience shifts toward data, machine learning, Python workflows, and a more focused AI profile.",
+        occhio_label: "Long-form craft",
+        occhio_title: "Electronics Specialist",
+        occhio_copy: "Responsible for PCB layout, prototyping, testing, measurement, documentation, app-related product support, and technical training. This period shows sustained practical ownership across many different technical tasks.",
+        tum_label: "Systems",
+        tum_title: "Electrical engineering studies",
+        tum_copy: "Foundational electrical engineering studies. This phase added formal systems thinking and technical depth to an already practical electronics background.",
+        rittal_label: "Field work",
+        rittal_title: "Communications Electronics Technician",
+        rittal_copy: "Worked on wiring, cabling, adapting electrical cabinets to requirements, and supporting assembly work in an industrial hardware environment.",
+        abitur_label: "School phase",
+        abitur_title: "Abitur",
+        abitur_copy: "Completed the Abitur and broadened the general and technical base that later supported engineering studies and more advanced technical work.",
+        zlaser_label: "Foundation",
+        zlaser_title: "Vocational training in communications electronics",
+        zlaser_copy: "Training phase with hands-on work in soldering, board assembly, wiring, and fault diagnosis. This is where the practical electronics foundation was built.",
+        tag_browser: "browser",
+        tag_realtime: "realtime",
+        tag_ml: "machine learning",
+        tag_discovery: "discovery",
+        tag_scoring: "scoring",
+        tag_review: "review ui",
+        tag_pipeline: "pipeline",
+        tag_research: "research",
+        tag_iteration: "iteration",
+        tag_evaluation: "evaluation",
+        tag_modeling: "modeling",
+        tag_pcb: "pcb layout",
+        tag_testing: "testing",
+        tag_documentation: "documentation",
+        tag_engineering: "engineering",
+        tag_systems: "systems",
+        tag_wiring: "wiring",
+        tag_cabling: "cabling",
+        tag_electrical: "electrical systems",
+        tag_education: "education",
+        tag_foundation: "technical base",
+        tag_troubleshooting: "troubleshooting",
+        footer_start: "Start"
+      }
+    };
+
+    function setActiveEntry() {
+      let bestEntry = entries[0];
+      let bestDistance = Number.POSITIVE_INFINITY;
+      const viewportCenter = window.innerHeight * 0.42;
+
+      entries.forEach((entry) => {
+        const rect = entry.getBoundingClientRect();
+        const entryCenter = rect.top + (rect.height / 2);
+        const distance = Math.abs(entryCenter - viewportCenter);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestEntry = entry;
+        }
+      });
+
+      entries.forEach((entry) => {
+        entry.classList.toggle("is-visible", entry === bestEntry);
+      });
+    }
+
+    function applyLanguage(lang) {
+      document.documentElement.lang = lang;
+      document.querySelectorAll("[data-i18n]").forEach((node) => {
+        const key = node.dataset.i18n;
+        const text = translations[lang][key];
+        if (text) {
+          node.innerHTML = text;
+        }
+      });
+
+      langButtons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.langBtn === lang);
+      });
+    }
+
+    langButtons.forEach((button) => {
+      button.addEventListener("click", () => applyLanguage(button.dataset.langBtn));
+    });
+
+    window.addEventListener("scroll", setActiveEntry, { passive: true });
+    window.addEventListener("resize", setActiveEntry);
+
+    applyLanguage("en");
+    setActiveEntry();
+  </script>
+</body>
+</html>
